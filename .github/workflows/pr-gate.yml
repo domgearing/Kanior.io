@@ -38,10 +38,10 @@ jobs:
           package-manager-cache: false
 
       - name: Install project dependencies
-        run: ./scripts/setup-ci.sh
+        run: bash ./scripts/setup-ci.sh
 
       - name: Static, unit, architecture, contract, and build checks
-        run: ./scripts/check.sh
+        run: bash ./scripts/check.sh
 
   integration:
     name: Integration + Migrations
@@ -79,13 +79,13 @@ jobs:
           package-manager-cache: false
 
       - name: Install project dependencies
-        run: ./scripts/setup-ci.sh
+        run: bash ./scripts/setup-ci.sh
 
       - name: Integration tests
-        run: ./scripts/test-integration.sh
+        run: bash ./scripts/test-integration.sh
 
       - name: Validate migrations against clean PostgreSQL
-        run: ./scripts/check-migrations.sh
+        run: bash ./scripts/check-migrations.sh
 
   evals:
     name: PR Evals
@@ -107,10 +107,10 @@ jobs:
           package-manager-cache: false
 
       - name: Install project dependencies
-        run: ./scripts/setup-ci.sh
+        run: bash ./scripts/setup-ci.sh
 
       - name: Run blocking PR eval suite
-        run: ./scripts/eval.sh pr
+        run: bash ./scripts/eval.sh pr
 
   required:
     name: PR Gate / required

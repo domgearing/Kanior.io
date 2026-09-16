@@ -9,10 +9,10 @@ printf 'KaniorAI PR Readiness Gate\n'
 printf 'Started: %s\n' "$started_at"
 printf '========================================\n'
 
-./scripts/check.sh
-./scripts/test-integration.sh
-./scripts/check-migrations.sh
-./scripts/eval.sh pr
+bash ./scripts/check.sh
+bash ./scripts/test-integration.sh
+bash ./scripts/check-migrations.sh
+bash ./scripts/eval.sh pr
 
 printf '\n========================================\n'
 printf 'PR READY: PASS\n'

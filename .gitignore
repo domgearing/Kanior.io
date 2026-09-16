@@ -1,0 +1,3 @@
+# PR/eval run artifacts
+.artifacts/
+evals/results/

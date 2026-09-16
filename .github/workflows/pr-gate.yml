@@ -1,0 +1,133 @@
+name: PR Gate
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "24"
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install project dependencies
+        run: ./scripts/setup-ci.sh
+
+      - name: Static, unit, architecture, contract, and build checks
+        run: ./scripts/check.sh
+
+  integration:
+    name: Integration + Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kanior_pr_gate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kanior_pr_gate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/kanior_pr_gate
+      PR_GATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/kanior_pr_gate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install project dependencies
+        run: ./scripts/setup-ci.sh
+
+      - name: Integration tests
+        run: ./scripts/test-integration.sh
+
+      - name: Validate migrations against clean PostgreSQL
+        run: ./scripts/check-migrations.sh
+
+  evals:
+    name: PR Evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install project dependencies
+        run: ./scripts/setup-ci.sh
+
+      - name: Run blocking PR eval suite
+        run: ./scripts/eval.sh pr
+
+  required:
+    name: PR Gate / required
+    if: always()
+    needs: [checks, integration, evals]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify every required job passed
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+          EVALS_RESULT: ${{ needs.evals.result }}
+        run: |
+          echo "Checks:      $CHECKS_RESULT"
+          echo "Integration: $INTEGRATION_RESULT"
+          echo "Evals:       $EVALS_RESULT"
+          test "$CHECKS_RESULT" = "success"
+          test "$INTEGRATION_RESULT" = "success"
+          test "$EVALS_RESULT" = "success"

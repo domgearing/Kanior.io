@@ -12,6 +12,13 @@ ARCHITECTURE.md
 
 If your task conflicts with it, do not silently change the architecture. Document the conflict and create an ADR if a material design change is required.
 
+An agent MUST NOT create, submit, or mark a pull request
+ready for review until:
+
+    ./scripts/pr-ready.sh
+
+exits with code 0.
+
 ---
 
 # Core Mission

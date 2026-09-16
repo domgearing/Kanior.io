@@ -1,0 +1,50 @@
+version = 1
+
+[suites.pr]
+evals = ["harness_self_test"]
+
+[suites.full]
+evals = ["harness_self_test"]
+
+[evals.harness_self_test]
+description = "Proves the eval harness can execute a check, parse a metric, and enforce a threshold."
+command = ["python", "evals/checks/harness_self_test.py"]
+metric = "pass_rate"
+comparison = "gte"
+threshold = 1.0
+blocking = true
+
+# Add product evals here when the protected behavior first exists.
+# Examples to activate as KaniorAI is implemented:
+#
+# [evals.quote_fidelity]
+# description = "Rendered verified quotes exactly match canonical source spans."
+# command = ["python", "evals/checks/quote_fidelity.py"]
+# metric = "exact_match_rate"
+# comparison = "gte"
+# threshold = 1.0
+# blocking = true
+#
+# [evals.authorization_isolation]
+# description = "Unauthorized passages never enter retrieval/ranking results."
+# command = ["python", "evals/checks/authorization_isolation.py"]
+# metric = "unauthorized_results"
+# comparison = "lte"
+# threshold = 0
+# blocking = true
+#
+# [evals.fabricated_quote]
+# description = "The system never emits a verified quote not grounded in a source span."
+# command = ["python", "evals/checks/fabricated_quote.py"]
+# metric = "fabricated_quotes"
+# comparison = "lte"
+# threshold = 0
+# blocking = true
+#
+# [evals.retrieval]
+# description = "Known relevant evidence is retrieved on the synthetic gold set."
+# command = ["python", "evals/checks/retrieval.py"]
+# metric = "recall_at_20"
+# comparison = "gte"
+# threshold = 0.90
+# blocking = true

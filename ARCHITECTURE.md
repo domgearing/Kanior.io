@@ -1,993 +1,797 @@
-# Secure Transcript Intelligence Platform — Architecture & Build Plan
+# Secure Transcript Intelligence Platform - Architecture & Build Plan
+
+**Implementation baseline:** PROJECT_SPEC.md v1.2, 16 September 2026  
+**Role of this document:** Technical source of truth for architecture, module boundaries, implementation choices, build order, security invariants, and acceptance gates.
+
+---
 
 ## 1. Purpose
 
-This document is the technical source of truth for building the Secure Transcript Intelligence Platform.
+Build an internal, company-only transcript intelligence platform that can:
 
-The application is an internal, company-only system for:
+- record or import confidential research calls and internal meetings,
+- preserve original source artifacts and provenance,
+- produce readable timestamped transcripts,
+- approve and publish immutable transcript versions as canonical evidence,
+- search authorized transcripts by exact phrase and semantic meaning,
+- answer questions using authorized source evidence,
+- guarantee that user-visible quotations are exact stored source spans,
+- link each quote to its approved transcript version, source, speaker, and timestamp where available,
+- export published transcript artifacts to an approved company OneDrive destination,
+- later support bookmarks, timestamped notes, collaboration, granular governance, and production-scale operations.
 
-- Recording meetings.
-- Uploading existing recordings and transcripts.
-- Producing accurate, cleaned, timestamped transcripts.
-- Treating the cleaned transcript as the canonical source of truth after processing.
-- Searching transcripts by keyword and meaning.
-- Asking AI questions across authorized transcripts.
-- Returning quotations that are guaranteed to be copied exactly from stored source text.
-- Linking every quotation to its source transcript, speaker, and transcript timestamp.
-- Allowing interviewers to bookmark important moments during live calls.
-- Allowing interviewers to create timestamped notes during calls.
-- Synchronizing cleaned transcripts and related artifacts to company OneDrive.
-- Keeping confidential data isolated, permission-controlled, encrypted, auditable, and securely stored.
-
-This document defines:
-
-1. Architectural principles.
-2. Security invariants.
-3. Core data model.
-4. Module boundaries.
-5. Stable interfaces.
-6. Build sequence.
-7. Acceptance gates.
-8. Testing requirements.
-9. Agent-development rules.
-10. MVP and production milestones.
+The platform must remain useful when the answer-generation model is unavailable. Keyword search, transcript viewing, and deterministic quote rendering are core application functions, not AI-dependent features.
 
 ---
 
-# 2. Primary Product Goals
+## 2. Source-of-Truth Hierarchy
 
-The system must optimize for the following goals, in priority order.
+When project documents conflict, use this hierarchy:
 
-## 2.1 Confidentiality
+1. `AGENTS.md` - coding-agent operating rules and handoff behavior.
+2. `ARCHITECTURE.md` - authoritative technical architecture and build order.
+3. `PROJECT_SPEC.md` - detailed engineering/product requirements and acceptance criteria.
+4. ADRs under `docs/decisions/` - approved changes to architecture.
+5. Machine-readable contracts and schemas - executable interface definitions.
+6. Active implementation plan - scope of the current coding task.
 
-Company research is confidential.
+If an implementation task conflicts with this architecture:
 
-The system must prevent unauthorized users, organizations, projects, services, or model providers from accessing source material.
+- do not silently improvise,
+- document the conflict,
+- create or update an ADR when the design choice is material,
+- update this document when the approved architecture changes.
 
-Security is part of the architecture, not a feature added later.
-
----
-
-## 2.2 Quote integrity
-
-Any text displayed to the user as a direct quotation must exist exactly in the canonical cleaned transcript.
-
-The LLM must never generate quotation text.
-
-The central invariant is:
-
-> AI may decide which evidence is relevant. Deterministic application code determines what the cleaned transcript actually says.
+`PROJECT_SPEC.md` v1.2 is the implementation baseline used by this revision of `ARCHITECTURE.md`.
 
 ---
 
-## 2.3 Provenance
+# 3. Non-Negotiable Architectural Invariants
 
-Every displayed quote must resolve to:
+## 3.1 Approved transcript text is the source of truth
+
+The system preserves distinct artifacts:
 
 ```text
-Quote
-  ↓
-Passage ID
-  ↓
-Canonical Cleaned Transcript
-  ↓
-Source / Meeting
-  ↓
-Speaker
-  ↓
-Transcript Timestamp
+Original recording / imported file
+        ↓
+Raw provider output or raw imported transcript
+        ↓
+Parsed transcript
+        ↓
+Cleaned / corrected draft
+        ↓
+Approval bound to exact content hash
+        ↓
+Published immutable canonical transcript version
 ```
 
-The cleaned transcript is the application's source of truth.
+Only an approved, published transcript version may become normal searchable evidence.
 
-The original audio is not required to validate a displayed quotation.
-
----
-
-## 2.4 Transcript Ground Truth
-
-The transcription pipeline may produce several intermediate artifacts:
-
-```text
-Original Recording
-      ↓
-Raw STT Output
-      ↓
-Normalized Transcript
-      ↓
-Cleaned Transcript
-```
-
-Once the cleaned transcript has been successfully generated and stored, it becomes the canonical source of truth for:
-
-- quotation rendering,
-- search,
-- semantic indexing,
-- GPT evidence selection,
-- citations,
-- bookmarks,
-- notes,
-- OneDrive synchronization,
-- downstream analysis.
-
-The application does not need to verify quotations against the underlying audio.
+Human audio review is optional. Approval does not imply that a person listened to every word.
 
 The quote guarantee is:
 
-> Quotes are 100% identical to text contained in the canonical cleaned transcript.
+> A verified quote is exactly equal to a contiguous span of the approved, published transcript version from which it is rendered.
 
-Audio can still be retained for operational, archival, or compliance reasons, but it is not part of the quote-verification chain.
-
-Depending on company retention policy, original audio may eventually be deleted after successful transcription and transcript processing.
+Audio may be retained for provenance, replay, correction, compliance, or investigation, but the application does not need to compare a rendered quote against the audio before displaying it.
 
 ---
 
-## 2.5 Project isolation
+## 3.2 LLMs never author authoritative quote text
 
-Projects are separate research workspaces.
-
-Content in one project must not automatically become searchable from another project.
-
-Authorization must happen before retrieval.
-
----
-
-## 2.6 Extensibility
-
-The initial application should be deliberately simple, but all foundational systems must support later addition of:
-
-- live recording,
-- live transcription,
-- bookmarks,
-- timestamped notes,
-- collaborative projects,
-- transcript editing,
-- richer AI analysis,
-- meeting integrations,
-- compliance tooling,
-- additional document types.
-
----
-
-# 3. Architectural Principles
-
-## Principle 1 — Canonical transcript data is immutable
-
-Once a cleaned transcript becomes canonical, do not silently alter it.
-
-If changes are required, create a new transcript version.
-
-Example:
+The system is divided into three evidence systems:
 
 ```text
-Raw STT Transcript
-      ↓
-Normalized Transcript
-      ↓
-Cleaned Transcript v1
-      ↓
-Corrected Cleaned Transcript v2
+Retriever
+    ↓
+Evidence Selector
+    ↓
+Deterministic Quote Renderer
 ```
 
-Only one transcript version should be designated as the current canonical version for a source at a given time.
+The Retriever returns authorized passage references.
 
-All passages and quotations must identify which canonical transcript version they derive from.
-
----
-
-## Principle 2 — The cleaned transcript is the source of truth
-
-Do not require audio verification for downstream search or quotation.
-
-Once cleaning is complete:
+The Evidence Selector may return:
 
 ```text
-Cleaned Transcript
-      ↓
-Passages
-      ↓
-Search
-      ↓
-Quotes
-      ↓
-AI Analysis
+passage_id
 ```
 
-All downstream systems operate against the cleaned transcript.
-
----
-
-## Principle 3 — Retrieval and rendering are separate
-
-Retrieval answers:
-
-> Which source passages appear relevant?
-
-Rendering answers:
-
-> What exact characters exist in that cleaned transcript passage?
-
-These must be separate components.
-
----
-
-## Principle 4 — LLMs never render quotes
-
-An LLM may return:
-
-```json
-{
-  "selected_passage_ids": ["passage_123", "passage_981"]
-}
-```
-
-It must not be trusted to return:
-
-```json
-{
-  "quote": "The customer said..."
-}
-```
-
-Any `quote_text` generated by an LLM must be ignored or rejected.
-
----
-
-## Principle 5 — Authorization precedes retrieval
-
-Never retrieve broadly and filter afterward.
-
-The retrieval universe must first be constrained to data the requesting user can access.
-
-Conceptually:
+or, in a separately validated precise-span mode:
 
 ```text
-User
- ↓
-Authenticate
- ↓
-Determine authorized projects/sources
- ↓
-Search authorized passages only
- ↓
-Evidence selection
- ↓
-Render selected source text
+passage_id
+start_character
+end_character
 ```
 
----
+It must not return authoritative quote text.
 
-## Principle 6 — Authorization occurs again during rendering
-
-Even if a passage ID reaches the renderer, the renderer must independently check whether the user is allowed to access it.
-
-A guessed passage ID must not expose data.
+Only deterministic application code may construct a user-visible verified quotation.
 
 ---
 
-## Principle 7 — OneDrive is not the operational database
+## 3.3 Authorization precedes retrieval
 
-OneDrive is a synchronized company repository.
+Never search globally and remove unauthorized results afterward.
 
-The application retains its own canonical operational store for:
-
-- projects,
-- permissions,
-- cleaned transcript versions,
-- passages,
-- search indices,
-- bookmarks,
-- notes,
-- provenance,
-- sync metadata.
-
----
-
-## Principle 8 — Live systems must not determine permanent truth
-
-Live transcription is provisional.
-
-The post-call processing pipeline creates the canonical cleaned transcript.
-
-Live bookmarks and notes should depend on recording timestamps rather than provisional transcript wording.
-
-After processing, those timestamps are mapped to the canonical transcript.
-
----
-
-## Principle 9 — Modules communicate through stable contracts
-
-Agents should implement modules against interfaces rather than directly depending on another module's implementation.
-
-Example:
-
-```ts
-searchPassages(
-  query: SearchQuery,
-  permissions: AuthContext
-): Promise<PassageReference[]>
-```
-
-and:
-
-```ts
-renderPassage(
-  selection: QuoteSelection,
-  auth: AuthContext
-): Promise<VerbatimPassage>
-```
-
-The retrieval implementation can change without changing the quote renderer.
-
----
-
-# 4. Recommended Technical Stack
-
-This is the default stack unless an Architectural Decision Record explicitly changes it.
-
-## Front end
+The eligible retrieval set must first be restricted by current:
 
 ```text
-Next.js
-React
-TypeScript
+tenant
+workspace
+project
+document restrictions
+published-version state
+approval state
+retention state
+user permissions
 ```
+
+Only then may keyword or vector ranking occur.
+
+Unauthorized results, counts, scores, snippets, and metadata must not leak through retrieval behavior.
 
 ---
 
-## Backend
+## 3.4 Authorization is repeated at quote delivery
+
+A selected passage ID, source span ID, guessed identifier, stale candidate set, or previously saved answer never grants access.
+
+The renderer must independently re-check current authorization and approval before every delivery or export of quote content.
+
+---
+
+## 3.5 Canonical transcript versions are immutable
+
+Do not silently overwrite an approved transcript.
+
+Corrections create a new version:
 
 ```text
-Node.js
-TypeScript
+Published v1
+    ↓
+Correction draft
+    ↓
+Approval for exact v2 hash
+    ↓
+Published v2
 ```
 
-A small dedicated API service is preferred over placing all backend logic inside frontend routes.
+Historical citations may remain pinned to v1 for auditability while normal search defaults to the active published version.
 
 ---
 
-## Repository
+## 3.6 OneDrive is an export destination, not the operational database
 
-Recommended structure:
+The application keeps its own authoritative operational state for:
+
+- projects and permissions,
+- source assets,
+- raw transcript artifacts,
+- transcript versions and approvals,
+- passages and indexes,
+- evidence runs and source spans,
+- annotations,
+- jobs and audit state,
+- export state.
+
+OneDrive receives versioned exports of published artifacts.
+
+---
+
+## 3.7 Live text is provisional
+
+Live transcription, if added, is never permanent source truth.
+
+Bookmarks and notes bind to the recording timeline rather than provisional transcript wording.
+
+After post-meeting processing, timestamps are mapped to the approved published transcript.
+
+---
+
+## 3.8 Confidential content stays out of ordinary telemetry
+
+Do not place the following in standard application logs, traces, metrics, or error events:
+
+- raw audio,
+- raw or canonical transcript text,
+- note bodies,
+- model responses containing confidential evidence,
+- full prompts containing confidential evidence,
+- query text unless an explicitly approved diagnostic policy allows it,
+- access tokens,
+- signed URLs.
+
+Operational telemetry should use identifiers, durations, counts, state, and safe error codes.
+
+---
+
+# 4. Implementation Architecture
+
+Use a modular monolith initially.
+
+A module boundary is a code, contract, and authorization boundary. It does not require a separate network service.
+
+The baseline implementation choices are:
+
+| Concern | MVP implementation | Production evolution |
+|---|---|---|
+| Web UI | React + TypeScript with Vite | Same UI with live updates |
+| Desktop capture | Electron + Recall.ai Desktop Recording SDK | Same capture adapter with signed updates and tested recovery |
+| API | Python FastAPI | Scale stateless API replicas independently |
+| Validation/contracts | Pydantic | Generated/public contract artifacts remain versioned |
+| ORM/migrations | SQLAlchemy + Alembic | Same migration discipline |
+| Worker | Python worker | Durable workflow activities behind the same domain contracts |
+| MVP jobs | Durable PostgreSQL `jobs` table with leases, retry schedule, idempotency, and transactional outbox | Azure Durable Functions + Service Bus where justified |
+| Database/search | PostgreSQL + full-text search + pgvector | Managed PostgreSQL when required |
+| Authoritative object storage | Private Backblaze B2 | Private Azure Blob Storage is the managed alternative |
+| Budget hosting | One small DigitalOcean VM for web/API/worker plus managed/external dependencies | Azure Container Apps with separate worker pools is the managed alternative |
+| Identity | Single-tenant Microsoft Entra ID, authorization-code flow with PKCE, server-side session | Managed employee lifecycle/access review integration |
+| Speech recognition | AssemblyAI Universal-3.5 Pro, pinned `universal-3-5-pro`, post-meeting, with diarization | Same provider contract with versioned speaker reconciliation and correction |
+| Transcript cleanup | Approved GPT adapter proposing narrowly permitted formatting edits | Same contract with versioned prompts/validators and regression evaluation |
+| Evidence selection / synthesis | Approved GPT deployment through an application adapter | Pin model/config versions and evaluate before upgrades |
+| Embeddings | Approved embedding deployment; embeddings stored in PostgreSQL/pgvector | Re-index by generation when model changes |
+| Microsoft 365 | Microsoft Graph with service-owned export identity and allowlisted destination | Reconciliation and stricter governance |
+| Secrets | Server-side restricted secrets; no provider credentials in browser or desktop bundle | Managed vault/workload identities |
+| Monitoring | Structured metadata logs and health checks | OpenTelemetry, dashboards, alerts, SLOs |
+| Delivery | Containers, migrations, tests, infrastructure as code | Staged rollout, rollback drills, supply-chain controls |
+| System-wide hotkeys | Not required for initial MVP | Signed Windows companion; browser foreground shortcut remains available |
+
+Do not silently replace these baseline choices. A material replacement requires an ADR.
+
+Provider, model, runtime, and API versions must be pinned in repository configuration. Do not use unversioned `latest` model identifiers for production behavior.
+
+---
+
+# 5. Repository Structure
+
+The baseline repository should evolve toward:
 
 ```text
 /
-├── apps/
-│   ├── web/
-│   ├── api/
-│   └── worker/
+├── AGENTS.md
+├── README.md
+├── ARCHITECTURE.md
+├── PROJECT_SPEC.md
 │
-├── packages/
-│   ├── contracts/
-│   ├── database/
-│   ├── auth/
-│   ├── storage/
+├── web/
+│   └── React + TypeScript + Vite application
+│
+├── desktop/
+│   └── Electron / Recall desktop capture application
+│
+├── api/
+│   └── FastAPI HTTP application
+│
+├── workers/
+│   └── background job execution
+│
+├── domain/
+│   ├── identity/
+│   ├── authorization/
+│   ├── ingestion/
 │   ├── transcripts/
-│   ├── retrieval/
-│   ├── quote-engine/
-│   ├── ai/
-│   └── shared/
+│   ├── transcript_approval/
+│   ├── indexing/
+│   ├── retriever/
+│   ├── evidence_selector/
+│   ├── quote_renderer/
+│   ├── annotations/
+│   ├── exports/
+│   ├── policies/
+│   └── audit/
+│
+├── connectors/
+│   ├── recall/
+│   ├── assemblyai/
+│   ├── openai/
+│   ├── microsoft_graph/
+│   └── object_storage/
+│
+├── migrations/
+│   └── Alembic migrations
+│
+├── schemas/
+│   ├── openapi/
+│   ├── events/
+│   ├── imports/
+│   └── ai/
 │
 ├── tests/
-├── infrastructure/
-├── docs/
-│   ├── ADR/
-│   └── diagrams/
+│   ├── unit/
+│   ├── integration/
+│   ├── contract/
+│   ├── architecture/
+│   ├── e2e/
+│   └── fixtures/
 │
-├── AGENTS.md
-└── ARCHITECTURE.md
+├── evals/
+│   ├── datasets/
+│   ├── expected/
+│   └── results/
+│
+├── infra/
+│   ├── local/
+│   └── environments/
+│
+├── runbooks/
+│
+├── docs/
+│   ├── DATA_MODEL.md
+│   ├── API_CONTRACTS.md
+│   ├── SECURITY.md
+│   ├── EVALS.md
+│   ├── decisions/
+│   └── plans/
+│       ├── active/
+│       └── completed/
+│
+├── scripts/
+│
+└── .github/
+    └── workflows/
 ```
 
-A pnpm workspace / monorepo is appropriate.
+Frontend code must not duplicate authorization logic or construct verified quote text independently.
+
+Generated/shared API types should be derived from documented contracts rather than redefined separately across clients.
 
 ---
 
-## Structured data
+# 6. Runtime Architecture
+
+## 6.1 MVP runtime
 
 ```text
-PostgreSQL
+Employee web / Electron client
+          │
+          ├──── Microsoft Entra ID
+          │
+          ├──── Recall Desktop SDK
+          │
+          ▼
+     FastAPI application
+          │
+          ├──── PostgreSQL
+          │       ├─ identity / permissions
+          │       ├─ transcript metadata
+          │       ├─ approvals
+          │       ├─ jobs / outbox
+          │       ├─ full-text index
+          │       └─ pgvector embeddings
+          │
+          ├──── Private object storage (Backblaze B2 baseline)
+          │       ├─ original assets
+          │       ├─ raw provider outputs
+          │       ├─ transcript versions
+          │       └─ export artifacts
+          │
+          └──── Python worker
+                  ├─ AssemblyAI
+                  ├─ approved GPT / embeddings
+                  └─ Microsoft Graph
 ```
 
-PostgreSQL is the system of record.
+Deploy one API and one worker from one repository, one PostgreSQL database, one authoritative object store, and a separate recovery/backup location.
+
+MVP does not require:
+
+- Redis,
+- Kubernetes,
+- a dedicated vector database,
+- an event-streaming platform,
+- a meeting bot.
+
+Queued work must survive process restarts through PostgreSQL-backed durable job state.
 
 ---
 
-## Semantic retrieval
+## 6.2 Production runtime
+
+Production may evolve to:
 
 ```text
-pgvector
+Web / Electron clients
+        │
+        ▼
+API + authorization
+        │
+        ├──── PostgreSQL
+        ├──── private object storage
+        ├──── authenticated live gateway
+        │
+        └──── transactional outbox
+                  │
+                  ▼
+             Service Bus
+                  │
+                  ▼
+        Durable workflow orchestration
+             ├─ media/STT workers
+             ├─ indexing workers
+             ├─ export workers
+             └─ governance workers
 ```
 
-Keep vectors inside PostgreSQL initially.
+Durable orchestration must carry identifiers and safe metadata, not transcript bodies, audio, access tokens, or signed URLs in replayable orchestration state.
 
-Do not introduce a separate vector database unless scale measurements justify it.
+Do not split permission, evidence, and version metadata into separate databases merely to create microservices.
 
 ---
 
-## File/object storage
+# 7. Stable Module Boundaries
 
-Prefer:
+Modules depend on contracts, not another module's implementation internals.
+
+Core responsibilities:
+
+| Module | Responsibility |
+|---|---|
+| Identity/session | Validate Entra authentication and establish server session |
+| Authorization | Evaluate current resource/action permission |
+| Capture/upload | Accept and validate recording/upload assets |
+| Import parser | Parse TXT/VTT/SRT/JSON into stable segments |
+| Speech adapter | Call AssemblyAI and preserve raw provider output/timing |
+| Transcript cleanup | Produce only validated, policy-allowed cleanup edits |
+| Transcript approval | Bind approval/revocation to an exact draft content hash |
+| Version publisher | Publish immutable approved transcript version and active pointer |
+| Indexer | Build lexical and embedding indexes by version/generation |
+| Retriever | Return ranked authorized passage references only |
+| Evidence loader | Reauthorize and load candidate text for model context |
+| Evidence selector | Select allowed passage IDs or validated subspans |
+| Quote renderer | Reauthorize, integrity-check, and return exact source span |
+| Analysis composer | Produce paraphrase/analysis only from rendered evidence |
+| Annotation service | Persist bookmarks/notes and revision history |
+| Export connector | Export published versions and reconcile destination state |
+| Governance | Retention, holds, deletion, access-review workflows |
+| Audit | Persist content-free security and governance events |
+| Operations | Jobs, retries, dead-letter handling, metrics, recovery |
+
+Stable conceptual interfaces include:
 
 ```text
-Azure Blob Storage
+AuthorizationService.authorize(...)
+CaptureService.finalize(...)
+TranscriptParser.parse(...)
+TranscriptionProvider.transcribe(...)
+TranscriptCleaningService.propose_edits(...)
+TranscriptApprovalService.approve(...)
+TranscriptPublisher.publish(...)
+RetrievalService.search_passages(...)
+EvidenceSelector.select(...)
+QuoteRenderer.render(...)
+AnalysisComposer.compose(...)
+AnnotationService.create(...)
+ExportService.export(...)
+AuditService.record(...)
 ```
 
-Store as required:
+Domain modules must not call external provider APIs directly. Provider access belongs behind connector/adaptor boundaries.
 
-- original recordings,
-- original uploads,
-- raw transcription outputs,
-- derived exports.
+The quote renderer must not import or call an LLM client.
 
-Audio retention should be configurable.
+The evidence selector must not mutate transcript/source records.
 
-The application must not depend on permanent audio retention.
+The retriever must not construct verified quote text.
 
 ---
 
-## Authentication
+# 8. Core Identifiers and Scope
+
+Implementation contracts should use one consistent naming scheme.
+
+Canonical scope identifiers:
 
 ```text
-Microsoft Entra ID
-```
-
-No public account creation.
-
-Only authorized company identities may authenticate.
-
----
-
-## Microsoft integrations
-
-```text
-Microsoft Graph API
-```
-
-Use for:
-
-- OneDrive,
-- optional Outlook/calendar integration,
-- future Teams integration.
-
----
-
-## Background jobs
-
-Introduce a queue/workflow abstraction.
-
-An MVP may use:
-
-```text
-Redis + BullMQ
-```
-
-More complicated production workflows may later migrate behind the abstraction to a durable workflow system.
-
-Do not make business logic depend directly on BullMQ-specific concepts.
-
----
-
-## Speech-to-text
-
-Create a provider abstraction.
-
-Example:
-
-```ts
-interface TranscriptionProvider {
-  transcribe(input: AudioReference): Promise<RawTranscript>;
-}
-```
-
-The implementation may use Azure Speech, Deepgram, or another approved enterprise provider.
-
-Provider selection should be benchmarked against representative company calls.
-
----
-
-## LLM provider
-
-Create an AI gateway.
-
-Example:
-
-```ts
-interface AIProvider {
-  cleanTranscript(...): Promise<CleanedTranscript>;
-  selectEvidence(...): Promise<EvidenceSelection>;
-  synthesizeAnswer(...): Promise<Synthesis>;
-}
-```
-
-Business modules must not call external model APIs directly.
-
-Only providers approved for confidential company data may be used.
-
----
-
-# 5. Core Identifiers
-
-Define these before significant feature development begins.
-
-```text
-organization_id
+tenant_id
+workspace_id
 user_id
-
 project_id
+document_id
+transcript_version_id
+passage_id
+source_span_id
+```
+
+Supporting identifiers include:
+
+```text
 project_membership_id
-
-source_id
-source_file_id
-
-transcript_version_id
+capture_session_id
+source_asset_id
+raw_transcript_id
+transcript_approval_id
 speaker_id
-passage_id
-
-recording_id
-
-bookmark_id
-note_id
-
-answer_id
-evidence_selection_id
-
+annotation_id
+evidence_run_id
+candidate_id
+saved_answer_id
+job_id
+outbox_event_id
+export_destination_id
+export_manifest_id
 audit_event_id
-sync_job_id
 ```
 
-Use globally unique identifiers.
+Use opaque globally unique identifiers such as UUIDs.
 
-Prefer UUIDs or equivalent opaque IDs.
+Legacy terms from earlier documents map conceptually as follows:
 
-Never expose sequential database IDs where avoidable.
+```text
+organization_id -> tenant scope
+meeting_id      -> document_id
+source_id       -> document/source scope
+```
+
+New implementation contracts should not mix multiple names for the same concept.
+
+Every project-owned resource must be traceable through enforced parent scope.
 
 ---
 
-# 6. Core Data Model
+# 9. Canonical Data Model
 
-## Organization
-
-```text
-organizations
--------------
-id
-name
-created_at
-```
-
----
-
-## User
+The exact schema belongs in `docs/DATA_MODEL.md` and Alembic migrations. At architecture level, the required entities are:
 
 ```text
+tenants
+workspaces
 users
------
-id
-organization_id
-entra_subject_id
-email
-display_name
-status
-created_at
-last_login_at
-```
-
----
-
-## Project
-
-```text
 projects
---------
-id
-organization_id
-name
-description
-created_by
-created_at
-archived_at
-```
-
----
-
-## Project Membership
-
-```text
 project_memberships
--------------------
-project_id
-user_id
-role
-created_at
-```
 
-Suggested roles:
+documents
+capture_sessions
+capture_chunks
+source_assets
 
-```text
-viewer
-member
-manager
-admin
-```
-
----
-
-# 7. Sources
-
-A source represents a research artifact.
-
-Examples:
-
-```text
-meeting recording
-uploaded recording
-uploaded transcript
-PDF
-DOCX
-```
-
-Schema:
-
-```text
-sources
--------
-id
-organization_id
-project_id
-source_type
-title
-created_by
-created_at
-processing_status
-canonical_transcript_version_id nullable
-```
-
-`canonical_transcript_version_id` identifies the transcript currently treated as ground truth.
-
----
-
-# 8. Source Files
-
-Original uploaded files should initially be preserved.
-
-```text
-source_files
-------------
-id
-source_id
-storage_key
-original_filename
-mime_type
-byte_size
-sha256_hash
-created_at
-retention_status
-deleted_at nullable
-```
-
-The SHA-256 hash enables integrity checking.
-
-Recording files may later be deleted according to configured retention policy without invalidating transcript-based quotes.
-
----
-
-# 9. Transcript Versions
-
-Never silently overwrite the canonical transcript.
-
-```text
+raw_transcripts
 transcript_versions
--------------------
-id
-source_id
-parent_version_id
-version_type
-status
-created_by
-created_at
-canonicalized_at nullable
-```
-
-Suggested `version_type` values:
-
-```text
-raw_stt
-normalized
-cleaned
-corrected_cleaned
-```
-
-Suggested `status` values:
-
-```text
-processing
-draft
-canonical
-superseded
-```
-
-There must be at most one current `canonical` transcript version per source.
-
----
-
-# 10. Canonical Transcript Rule
-
-The transcript processing pipeline ends when a cleaned transcript becomes canonical.
-
-Conceptually:
-
-```text
-Raw STT
- ↓
-Normalized
- ↓
-Cleaned
- ↓
-Canonical
-```
-
-All downstream passages, search indices, embeddings, citations, and quotes must reference the canonical transcript version.
-
-If the canonical transcript is corrected later:
-
-```text
-Canonical v1
- ↓
-Correction
- ↓
-Canonical v2
-```
-
-v1 becomes superseded.
-
-Derived passages and embeddings for v2 are regenerated.
-
-Existing historical answer records may continue to reference v1 for auditability.
-
----
-
-# 11. Speakers
-
-```text
+transcript_approvals
 speakers
---------
-id
-transcript_version_id
-label
-display_name
-```
-
----
-
-# 12. Passages
-
-A passage is the smallest addressable source unit used by retrieval.
-
-Examples:
-
-- interview Q&A block,
-- speaker turn,
-- paragraph group.
-
-```text
 passages
---------
-id
-organization_id
-project_id
-source_id
-transcript_version_id
-speaker_id
+word_alignments
+passage_indexes
 
-sequence_number
+evidence_runs
+evidence_candidates
+source_spans
+saved_answers
+quote_collections
+collection_items
 
-text
+annotations
+annotation_revisions
 
-start_time_ms
-end_time_ms
+jobs
+outbox_events
 
-start_character
-end_character
+export_destinations
+export_manifests
 
-text_hash
-
-created_at
-```
-
-Each active searchable passage must derive from the source's current canonical transcript.
-
----
-
-# 13. Embeddings
-
-Conceptually:
-
-```text
-passage_embeddings
-------------------
-passage_id
-embedding
-embedding_model
-created_at
-```
-
-Embeddings are derived data.
-
-If either the canonical transcript or embedding model changes, embeddings can be regenerated.
-
----
-
-# 14. Bookmarks
-
-```text
-bookmarks
----------
-id
-organization_id
-project_id
-source_id
-recording_id
-created_by
-
-client_timestamp
-recording_offset_ms
-
-passage_id nullable
-
-visibility
-
-created_at
-```
-
-The bookmark initially attaches to the meeting/recording timeline.
-
-After creation of the canonical cleaned transcript, it attaches to the transcript passage covering that timestamp.
-
-Audio playback is not required for bookmark functionality.
-
----
-
-# 15. Notes
-
-```text
-notes
------
-id
-organization_id
-project_id
-source_id
-recording_id
-created_by
-
-recording_offset_ms
-body
-
-passage_id nullable
-
-created_at
-updated_at
-```
-
-Notes must survive even if live transcription fails.
-
-After canonical transcript creation, map each note to the nearest relevant passage.
-
----
-
-# 16. AI Answers
-
-```text
-answers
--------
-id
-organization_id
-project_id
-user_id
-question
-synthesis
-created_at
-```
-
----
-
-## Evidence Selections
-
-```text
-answer_evidence
----------------
-answer_id
-passage_id
-start_offset nullable
-end_offset nullable
-retrieval_score
-selection_reason nullable
-```
-
-Do not store model-generated quotation strings as authoritative evidence.
-
----
-
-# 17. OneDrive Sync State
-
-```text
-onedrive_sync_state
--------------------
-source_id
-transcript_version_id
-onedrive_item_id
-last_synced_at
-sync_status
-content_hash
-```
-
-Only canonical cleaned transcript versions should normally be synchronized as final transcript artifacts.
-
----
-
-# 18. Audit Events
-
-```text
 audit_events
-------------
-id
-organization_id
-user_id
-event_type
-resource_type
-resource_id
-metadata
-created_at
+retention_policies
+holds
+deletion_requests
 ```
 
-Eventually track:
+## 9.1 Scope enforcement
 
-```text
-LOGIN
-SOURCE_VIEW
-SEARCH
-QUOTE_RENDER
-EXPORT
-TRANSCRIPT_EDIT
-TRANSCRIPT_CANONICALIZE
-ONEDRIVE_SYNC
-DELETE
-PERMISSION_CHANGE
-```
+Searchable passages, index records, evidence candidates, and source spans must carry or enforce the full parent scope required to prevent cross-project references.
+
+Use foreign keys, unique constraints, and PostgreSQL Row-Level Security as defense in depth.
+
+Runtime roles must not own protected tables, be database superusers, or have `BYPASSRLS`.
+
+Migration credentials are separate from runtime credentials.
 
 ---
 
-# 19. Quote-Safety Architecture
+## 9.2 Transcript version contract
 
-This is the most important architectural requirement.
-
-## Step 1 — User asks a question
-
-Example:
+A transcript version contains or references:
 
 ```text
-What did experts say about pricing pressure?
+version identity
+parent version
+raw transcript lineage
+canonical immutable object reference
+content SHA-256
+byte length
+cleanup model / prompt / validator versions
+cleanup status
+correction manifest
+approval reference
+publication state
+created_by / created_at
+published_at
 ```
+
+Approval records contain:
+
+```text
+transcript_version_id
+approved content SHA-256
+approval method
+policy version
+approver service or user
+timestamp
+reason / review metadata
+```
+
+Approval is hash-bound. Approval of one content hash cannot authorize a changed transcript.
 
 ---
 
-## Step 2 — Authorization scope is calculated
+## 9.3 Passage contract
 
-Determine the:
+Published passages are immutable source spans of one published transcript version.
+
+Canonical transcript offsets use:
 
 ```text
-organization
-projects
-sources
-canonical transcript versions
+zero-based UTF-8 byte offsets
+start inclusive
+end exclusive
 ```
 
-the user is permitted to search.
+Passages retain:
+
+```text
+passage_id
+transcript_version_id
+ordinal
+start_byte
+end_byte
+span_hash
+speaker_id nullable
+start_ms nullable
+end_ms nullable
+timing_precision
+```
+
+Browser UTF-16 string indexes must never be treated as canonical source offsets.
 
 ---
 
-## Step 3 — Retrieval finds candidate passages
+# 10. Transcript Ground-Truth Lifecycle
 
-Search may combine:
+## 10.1 Imported transcript
+
+```text
+TXT / VTT / SRT / JSON
+        ↓
+quarantine + validation
+        ↓
+immutable original bytes
+        ↓
+deterministic parser
+        ↓
+parsed raw transcript
+        ↓
+conservative cleanup proposal
+        ↓
+deterministic cleanup validator
+        ↓
+cleaned draft or unchanged fallback
+        ↓
+approval bound to exact content hash
+        ↓
+index generation
+        ↓
+atomic publication
+```
+
+## 10.2 Recorded meeting
+
+```text
+Recall Desktop SDK
+        ↓
+independently stored original recording
+        ↓
+AssemblyAI Universal-3.5 Pro + diarization
+        ↓
+immutable raw provider output
+        ↓
+speaker reconciliation
+        ↓
+parsed transcript
+        ↓
+conservative cleanup proposal
+        ↓
+validated draft
+        ↓
+approval
+        ↓
+published immutable transcript
+```
+
+Recall metadata and AssemblyAI anonymous speaker labels may be reconciled using aligned timing, but ambiguous speaker identity remains unknown rather than guessed.
+
+---
+
+# 11. Conservative Transcript Cleanup
+
+Automatic cleanup improves layout/readability without changing source wording.
+
+Initial permitted changes are intentionally narrow:
+
+- leading/trailing horizontal whitespace,
+- repeated spaces/tabs between existing tokens,
+- paragraph/line-break placement inside an existing speaker segment.
+
+Initial automatic cleanup must not:
+
+- add words,
+- remove words,
+- reorder words,
+- substitute words,
+- paraphrase,
+- repair grammar,
+- remove fillers or repetitions,
+- change names or numbers,
+- expand contractions,
+- translate,
+- resolve ambiguity,
+- change speaker assignment,
+- change punctuation or capitalization under the initial policy.
+
+The model proposes structured edits against stable segment IDs and source offsets.
+
+Application code validates and applies allowed edits deterministically.
+
+If cleanup is invalid, times out, or exceeds policy:
+
+```text
+retain unchanged parsed transcript
+mark cleanup_status = skipped
+continue through the configured approval policy
+```
+
+A human wording correction creates a new version and requires authorized approval.
+
+---
+
+# 12. Publication Rules
+
+A transcript version may be published only when:
+
+1. the source asset/raw transcript lineage is durable,
+2. the draft content hash is frozen,
+3. an approval exists for that exact hash,
+4. required passage generation is complete,
+5. required search indexes are ready, unless an explicitly labeled degraded lexical-only release is allowed,
+6. the expected parent/current active version has not changed concurrently.
+
+Publication updates the active version pointer atomically and writes the corresponding outbox event in the same transaction.
+
+Concurrent publication conflicts return a state conflict rather than overwriting another version.
+
+Approval revocation makes the version non-renderable and removes it from eligible normal retrieval.
+
+---
+
+# 13. Retrieval Architecture
+
+## 13.1 Eligibility first
+
+Construct the authorized eligible passage set before scoring or limiting.
+
+Eligibility includes current:
+
+- user/account state,
+- tenant/workspace scope,
+- project membership,
+- transcript/document restrictions,
+- publication state,
+- approval state,
+- retention/deletion state.
+
+## 13.2 Hybrid retrieval
+
+MVP retrieval may combine:
 
 ```text
 PostgreSQL full-text search
@@ -997,1724 +801,1261 @@ pgvector semantic similarity
 metadata filters
 ```
 
-Output:
+Baseline candidate strategy:
 
-```json
-[
-  {
-    "passage_id": "p_123",
-    "score": 0.92
-  },
-  {
-    "passage_id": "p_456",
-    "score": 0.87
-  }
-]
+```text
+up to 50 lexical candidates
++
+up to 50 vector candidates
+        ↓
+reciprocal-rank fusion
+        ↓
+deduplicate passage IDs
+        ↓
+retain up to 20 candidates
 ```
 
-Retrieval returns references.
+Candidate counts and thresholds may be tuned through evaluation, but authorization predicates are not tunable.
 
-Retrieval does not create quotations.
+Search is scoped to one project in MVP.
+
+Cross-project search, if added later, uses a server-derived allowlist of authorized projects.
+
+Exact phrase search verifies the phrase against canonical source text after indexed candidate discovery.
+
+Normalized/indexed text can improve matching but can never become quote source text.
 
 ---
 
-# 20. Evidence Selection
+# 14. Evidence Selection
 
-The LLM receives authorized candidate passages.
-
-Its job is to decide which evidence supports the answer.
-
-Required structured output:
-
-```json
-{
-  "status": "supported",
-  "answer": "Experts generally described continued pricing pressure...",
-  "selected_passages": [
-    {
-      "passage_id": "p_123"
-    },
-    {
-      "passage_id": "p_456"
-    }
-  ]
-}
-```
-
-Or:
-
-```json
-{
-  "status": "insufficient_evidence",
-  "answer": null,
-  "selected_passages": []
-}
-```
-
-The LLM is not an authoritative source for quote strings.
-
----
-
-# 21. Deterministic Quote Renderer
-
-The renderer is ordinary server code.
-
-Conceptual interface:
-
-```ts
-type QuoteSelection = {
-  passageId: string;
-  startOffset?: number;
-  endOffset?: number;
-};
-
-type VerbatimQuote = {
-  passageId: string;
-  text: string;
-  speaker: string | null;
-  startTimeMs: number | null;
-  endTimeMs: number | null;
-  sourceId: string;
-  transcriptVersionId: string;
-};
-
-async function renderQuote(
-  selection: QuoteSelection,
-  auth: AuthContext
-): Promise<VerbatimQuote>;
-```
-
-Implementation flow:
+A retrieval run is server-created and bound to:
 
 ```text
-Receive passage ID
- ↓
-Authenticate request
- ↓
-Load passage
- ↓
-Verify organization
- ↓
-Verify project permission
- ↓
-Verify transcript version is canonical or historically referenced
- ↓
-Validate requested offsets
- ↓
-Extract exact stored characters
- ↓
-Return exact text
+principal
+authorized scope
+query
+version IDs
+index generations
+expiry
 ```
 
-No language model participates in this operation.
+The caller cannot submit its own allowed candidate set.
 
-No audio lookup or verification is required.
+The Evidence Selector receives candidate text only through a trusted evidence loader that rechecks authorization.
 
----
-
-# 22. Hard Quote Invariants
-
-The following rules must never be violated.
-
-### Q1
-
-The UI must not accept arbitrary quote text from an LLM.
-
-### Q2
-
-Every displayed quote must have a `passage_id`.
-
-### Q3
-
-Every displayed quote must resolve to a stored transcript version.
-
-### Q4
-
-Every active quote must derive from canonical cleaned transcript text.
-
-### Q5
-
-Every quote must equal the stored source substring exactly.
-
-Server-side assertion:
-
-```ts
-renderedQuote.text ===
-storedPassage.text.slice(startOffset, endOffset)
-```
-
-### Q6
-
-The renderer performs authorization independently.
-
-### Q7
-
-If evidence cannot be located, return:
-
-```text
-Insufficient evidence
-```
-
-Do not fabricate likely wording.
-
-### Q8
-
-LLM analysis may paraphrase.
-
-Paraphrased analysis must visually differ from direct quotations.
-
-### Q9
-
-Quote provenance must remain available after model/provider changes.
-
-### Q10
-
-Audio verification is not required for quote validity.
-
----
-
-# 23. Retrieval Interface
-
-Stable interface:
-
-```ts
-interface RetrievalService {
-  searchPassages(
-    query: string,
-    auth: AuthContext,
-    filters?: SearchFilters
-  ): Promise<PassageReference[]>;
-}
-```
-
-Example:
-
-```ts
-type PassageReference = {
-  passageId: string;
-  sourceId: string;
-  score: number;
-  startTimeMs?: number;
-  speakerId?: string;
-};
-```
-
-Changing retrieval algorithms must not require changing quote rendering.
-
----
-
-# 24. Source Ingestion Pipeline
-
-```text
-Upload / Recording
- ↓
-Validate input
- ↓
-Store original where required
- ↓
-Calculate checksum
- ↓
-Create source record
- ↓
-Create processing job
- ↓
-Extract / transcribe
- ↓
-Normalize
- ↓
-Clean transcript
- ↓
-Designate canonical transcript
- ↓
-Create passages
- ↓
-Index keyword search
- ↓
-Generate embeddings
- ↓
-Ready
-```
-
-Each step should have explicit processing state.
-
----
-
-# 25. Processing States
-
-Suggested states:
-
-```text
-UPLOADED
-PROCESSING
-TRANSCRIBING
-NORMALIZING
-CLEANING
-INDEXING
-READY
-FAILED
-```
-
-`READY` means the canonical cleaned transcript and its derived passages are available.
-
-Failures must be retryable without duplicating sources.
-
-Background jobs must be idempotent.
-
----
-
-# 26. Uploaded Transcript Pipeline
-
-Supported initial formats:
-
-```text
-TXT
-SRT
-VTT
-```
-
-DOCX can follow.
-
-Flow:
-
-```text
-Original Upload
- ↓
-Format Parser
- ↓
-Normalized Representation
- ↓
-Cleaning
- ↓
-Canonical Cleaned Transcript
- ↓
-Passages
- ↓
-Index
-```
-
-The original uploaded transcript may be retained for audit/history, but retrieval operates against the cleaned canonical version.
-
----
-
-# 27. Recording / STT Pipeline
-
-```text
-Recording
- ↓
-Secure Object Storage
- ↓
-Transcription Provider
- ↓
-Raw STT Output
- ↓
-Normalization
- ↓
-Cleaning
- ↓
-Canonical Cleaned Transcript
- ↓
-Passages
- ↓
-Search Index
-```
-
-The canonical cleaned transcript, not the original audio, is the source of truth for all downstream research functionality.
-
----
-
-# 28. Audio Retention
-
-The system may retain audio depending on company policy.
-
-Possible retention strategies:
-
-```text
-retain indefinitely
-retain for configurable number of days
-delete after successful transcript processing
-delete manually
-```
-
-Deleting audio must not affect:
-
-- transcript search,
-- quote rendering,
-- AI answers,
-- citations,
-- bookmarks,
-- notes,
-- OneDrive transcript copies.
-
-Audio retention policy should therefore remain independent from transcript integrity.
-
----
-
-# 29. Transcript Timestamp Navigation
-
-Timestamp metadata remains useful even without audio validation.
-
-Each passage should retain:
-
-```text
-start_time_ms
-end_time_ms
-```
-
-This enables:
-
-- transcript navigation,
-- bookmark placement,
-- note placement,
-- jumping between marked moments,
-- chronological transcript browsing.
-
-The UI may display timestamps such as:
-
-```text
-[23:14]
-```
-
-without requiring an audio player.
-
----
-
-# 30. Live Bookmark System
-
-The bookmark system depends on meeting/recording time, not provisional transcript text.
-
-Keyboard event:
-
-```text
-User presses configured hotkey
- ↓
-Capture current recording_offset_ms
- ↓
-Immediately persist bookmark
-```
-
-API:
-
-```ts
-POST /recordings/:recordingId/bookmarks
-```
-
-Payload:
+Default selector output:
 
 ```json
 {
-  "recording_offset_ms": 1394000
+  "selected_passages": ["passage_uuid_1", "passage_uuid_2"]
 }
 ```
 
-After final transcript processing:
+Rules:
 
-```text
-Bookmark Timestamp
- ↓
-Find Canonical Transcript Passage Covering Timestamp
- ↓
-Attach passage_id
-```
+- zero to eight unique passage IDs,
+- IDs must belong to the sealed run,
+- unexpected fields are rejected,
+- model-supplied quote text is rejected,
+- model-supplied source paths, speaker names, timestamps, hashes, versions, or source span IDs are rejected.
 
-The user can then jump directly between marked transcript locations.
+For precise-excerpt mode, selector offsets are Unicode code-point positions within the exact passage text supplied to the selector.
 
----
+Server code validates those positions, converts them to absolute UTF-8 byte offsets in canonical source text, computes a span hash, and issues a server-owned `source_span_id`.
 
-# 31. Timestamped Notes
-
-Notes follow the same timing system.
-
-Example:
-
-```ts
-POST /recordings/:recordingId/notes
-```
-
-```json
-{
-  "recording_offset_ms": 1394000,
-  "body": "Important comment about customer churn."
-}
-```
-
-After transcript processing:
-
-```text
-Note Timestamp
- ↓
-Canonical Transcript
- ↓
-Nearest Passage
-```
-
-The UI displays the note beside that transcript location.
+Invalid offsets are rejected or explicitly fall back to whole-passage rendering; they are never silently rounded or guessed.
 
 ---
 
-# 32. Live Transcription
+# 15. Deterministic Quote Renderer
 
-Live transcription is optional for the first MVP.
+The quote renderer is a trusted application boundary.
 
-When implemented:
-
-```text
-Audio Stream
- ↓
-Streaming STT
- ↓
-Provisional Transcript
-```
-
-After the meeting:
+Conceptual flow:
 
 ```text
-Full Recording
- ↓
-High-Accuracy STT
- ↓
-Normalization
- ↓
-Cleaning
- ↓
-Canonical Transcript
+principal + validated passage/span reference
+        ↓
+load sealed/pinned records
+        ↓
+reauthorize current access
+        ↓
+verify transcript is published and currently approved
+        ↓
+load exact immutable source object
+        ↓
+verify transcript content hash
+        ↓
+verify passage/span bounds and UTF-8 boundaries
+        ↓
+slice exact stored bytes
+        ↓
+verify span hash
+        ↓
+decode strictly
+        ↓
+reauthorize again before delivery
+        ↓
+write durable render audit
+        ↓
+return VerifiedQuote
 ```
 
-The provisional live transcript is discarded or archived once the canonical cleaned transcript is ready.
+No LLM call belongs in this path.
 
-Bookmarks and notes stay anchored to time offsets and therefore survive transcript replacement.
+The renderer must never substitute:
+
+- indexed text,
+- cached model text,
+- a newer transcript version,
+- a normalized search representation,
+- a model-generated quotation.
+
+If integrity validation fails, the affected quote is unavailable and an integrity event is raised.
 
 ---
 
-# 33. OneDrive Integration
+# 16. Analysis / Synthesis Rules
 
-Use Microsoft Graph.
+Optional synthesis happens only after valid evidence has been rendered.
 
-Initial synchronization should include:
-
-```text
-canonical cleaned transcript
-source metadata
-notes
-bookmarks
-```
-
-Optionally:
+Public responses separate:
 
 ```text
-audio
-AI summaries
-exports
+status
+analysis
+quote_cards
 ```
 
-Internal storage remains authoritative for application state.
+Analysis is generated paraphrase, not verified quotation.
+
+Every analysis claim must cite delivered source span IDs or the response falls back to evidence-only mode according to the contract.
+
+Generated prose must never be placed into a quotation-bearing field or rendered with verified-quote styling.
+
+Do not stream unchecked model text directly to the user.
+
+If synthesis fails but evidence is available, return verified evidence with `analysis_unavailable` rather than failing the entire research workflow.
+
+If no permitted relevant evidence is found, return a scoped no-evidence state such as:
+
+> No relevant evidence found in the transcripts you can access.
+
+Do not claim the information does not exist globally.
 
 ---
 
-# 34. Authentication & Authorization
+# 17. Recording Architecture
 
-Authentication:
+The primary MVP capture path is:
 
 ```text
-Microsoft Entra ID
+Electron application
+        ↓
+Recall.ai Desktop Recording SDK
+        ↓
+authenticated upload completion
+        ↓
+retrieve/copy recording into independent private storage
+        ↓
+verify hash and duration
+        ↓
+submit to AssemblyAI
 ```
 
-There must be no public signup.
+Do not enable a second transcription service through Recall when AssemblyAI is the selected transcription provider.
+
+Browser microphone recording may be supported as a fallback, but it must not pretend to capture remote participant audio when the browser/source cannot provide it.
+
+For optional custom/browser uploads, use bounded ordered chunks and idempotent `(session_id, sequence)` behavior.
+
+Recall's SDK upload lifecycle remains Recall-specific; do not force the custom chunk protocol onto the Recall integration.
+
+Recording timestamps use a monotonic media timeline.
+
+Store wall-clock timing separately.
+
+Never silently concatenate around missing media; preserve visible gap mappings.
+
+---
+
+# 18. Bookmarks and Notes
+
+Bookmarks and notes attach to recording/media offsets, not provisional transcript wording.
+
+Bookmark creation captures the current media offset immediately and persists with a client-generated idempotency identifier where appropriate.
+
+After canonical transcript publication:
+
+```text
+annotation media offset
+        ↓
+find approved published transcript passage covering / nearest offset
+        ↓
+attach passage reference
+```
+
+Notes must survive transcription failure.
+
+Private annotations remain readable only by their author and are excluded from shared search, synthesis, and export.
+
+Shared annotations remain subject to current project/document authorization.
+
+---
+
+# 19. OneDrive Export Architecture
+
+OneDrive integration is one-way versioned export.
+
+Each published transcript version should export, according to project policy:
+
+```text
+readable Markdown transcript
+TXT transcript
+JSON provenance manifest
+```
+
+Shared notes/bookmarks may be included only when policy allows.
+
+Private notes are excluded.
+
+Audio export is off by default.
+
+Destination configuration uses an allowlisted company drive/folder.
+
+Destination readers must not be broader than authorized source readers.
+
+Store:
+
+```text
+destination IDs
+Graph item IDs
+ETags
+export content hashes
+status / attempts
+reconciliation state
+```
+
+External modifications do not change application source truth.
+
+OneDrive outages do not make canonical application data unavailable.
+
+---
+
+# 20. Authentication and Authorization
+
+Authentication uses a single-tenant Microsoft Entra application.
 
 Validate:
 
-```text
-tenant
-account
-organization membership
-account status
-```
+- issuer,
+- audience,
+- signature,
+- expiration,
+- nonce/state as appropriate,
+- expected tenant,
+- enabled employee assignment/group,
+- active application user record.
 
-Do not rely solely on email suffix checking.
+Email-domain checking is not a sufficient identity control.
+
+Use the Entra tenant ID plus object ID as stable external identity keys.
+
+Server-side sessions use secure cookies and the OAuth authorization-code flow with PKCE.
+
+Initial application roles:
+
+| Role | Main rights |
+|---|---|
+| Reader | Read/search/replay permitted transcripts; personal notes/collections |
+| Contributor | Reader + record/upload + shared annotations + prepare corrections |
+| Project owner | Contributor + publish versions + project membership + approved exports + deletion requests |
+| Tenant administrator | Configure identities/connectors/policies; no automatic transcript-read right |
+| Compliance auditor | Scoped audit metadata; content only through separately granted access |
+
+Transcript approval rights are separate from merely being able to propose a correction.
+
+The controlled-cleanup service may approve only unchanged text or edits validated under the configured cleanup policy.
 
 ---
 
-# 35. Authorization Hierarchy
+# 21. Defense in Depth
 
-Conceptually:
-
-```text
-Organization
-  └── Project
-       └── Source
-            └── Transcript Version
-                 └── Passage
-```
-
-Access to a child resource requires access through its parent hierarchy.
-
----
-
-# 36. Defense in Depth
-
-Authorization should occur at multiple layers:
+Authorization is enforced through multiple layers:
 
 ```text
-API middleware
+API/service checks
 +
-service layer
+PostgreSQL RLS
 +
-database query scoping
+scoped joins/queries
 +
-quote renderer
+worker resource revalidation
++
+evidence loader checks
++
+quote renderer reauthorization
++
+audio/export authorization
 ```
 
-Where practical, use PostgreSQL Row-Level Security or equivalent database protections as an additional defense.
+Private object storage has no public access.
+
+Object keys do not constitute authorization.
+
+Baseline audio playback uses an authorized API path.
+
+Never permit overwrite of published immutable transcript objects.
+
+Development, staging, and production use separate resources/identities. Synthetic or explicitly approved de-identified content is used outside production.
 
 ---
 
-# 37. MVP Definition
+# 22. Durable Jobs and Outbox
 
-The first meaningful application milestone is:
+MVP background work uses PostgreSQL-backed durable state.
+
+`jobs` records support:
 
 ```text
-Login
- ↓
-Create Project
- ↓
-Upload Transcript
- ↓
-Securely Store Source
- ↓
-Normalize + Clean Transcript
- ↓
-Designate Canonical Transcript
- ↓
-Create Passages
- ↓
-Search Passages
- ↓
-Display Exact Transcript Quotes
- ↓
-View Source Context
+job ID
+type
+aggregate/version reference
+idempotency key
+status
+attempt count
+lease owner / lease expiry
+next attempt time
+provider job ID
+safe error code
 ```
 
-This milestone should work without an LLM.
+Workers use:
+
+- leases,
+- heartbeat renewal,
+- bounded exponential retry with jitter,
+- maximum attempts,
+- dead-letter state,
+- operator retry,
+- provider-state reconciliation after uncertain submissions.
+
+External execution is not assumed exactly-once.
+
+All side effects must be idempotent.
+
+Domain changes that require downstream work write an `outbox_events` record in the same database transaction.
+
+Events carry identifiers and safe metadata, not transcript or note bodies.
+
+Production may migrate workflow coordination to Durable Functions and Service Bus while preserving the domain contracts and idempotency keys.
+
+Do not allow MVP and production workflow owners to process the same operation concurrently during migration.
 
 ---
 
-# 38. MVP + AI Definition
+# 23. Processing State Machines
 
-Next milestone:
+Do not overload one status column with every lifecycle.
+
+Use separate state machines.
+
+## Capture
 
 ```text
-Canonical Transcript
- ↓
-Hybrid Retrieval
- ↓
-Ask Natural-Language Question
- ↓
-LLM Selects Evidence
- ↓
-Application Renders Exact Quotes
- ↓
-LLM Synthesizes Cited Analysis
+created
+  ↓
+recording
+  ↓
+finalizing
+  ↓
+complete
 ```
 
-At this point the platform becomes an AI research system.
-
----
-
-# 39. Build Sequence
-
-Modules should generally be completed in this order.
-
-## Phase 1 — Repository + shared contracts + infrastructure
-
-Build:
-
-- monorepo,
-- environments,
-- local development,
-- CI,
-- secrets handling,
-- PostgreSQL,
-- object storage,
-- migrations,
-- logging,
-- shared contracts.
-
-### Gate
-
-Another module can create/read a project and source using documented APIs.
-
----
-
-## Phase 2 — Authentication + permissions
-
-Build:
-
-- Entra authentication,
-- organization membership,
-- project permissions,
-- authorization middleware,
-- tenant-aware database queries.
-
-### Gate
-
-A user cannot read an unauthorized source even if they know its ID.
-
----
-
-## Phase 3 — Canonical source/transcript data model
-
-Build:
-
-- source records,
-- uploaded files,
-- transcript versions,
-- canonical transcript designation,
-- passages,
-- speakers,
-- timestamps,
-- provenance metadata.
-
-### Gate
-
-Every passage deterministically resolves to one canonical cleaned transcript version and source.
-
----
-
-## Phase 4 — File ingestion
-
-Build:
-
-- secure upload,
-- object storage,
-- hashes,
-- validation,
-- processing states.
-
-### Gate
-
-Upload → storage → source record works reliably.
-
----
-
-## Phase 5 — Transcript normalization + cleaning
-
-Build:
-
-- transcript parsers,
-- normalization,
-- cleaning,
-- canonicalization,
-- passage creation.
-
-### Gate
-
-A known transcript can be imported, cleaned, designated canonical, and reproduced reliably from internal records.
-
----
-
-## Phase 6 — Quote renderer
-
-Build deterministic rendering before AI.
-
-### Gate
-
-The renderer cannot output characters that do not exist in the canonical cleaned transcript.
-
----
-
-## Phase 7 — Keyword search
-
-Build PostgreSQL full-text retrieval.
-
-### Gate
-
-Search → passage → exact quote → transcript context works end-to-end.
-
----
-
-## Phase 8 — Semantic retrieval
-
-Build:
+with explicit:
 
 ```text
-embeddings
-pgvector
-hybrid ranking
+interrupted
+aborted
 ```
 
-### Gate
+## Ingestion / transcript publication
 
-Conceptual queries retrieve relevant passages despite vocabulary mismatch.
+```text
+quarantined
+  ↓
+validated
+  ↓
+transcribing / parsing
+  ↓
+raw_saved
+  ↓
+cleaning / correcting
+  ↓
+draft_ready
+  ↓
+awaiting_approval
+  ↓
+approved
+  ↓
+indexing
+  ↓
+published
+```
+
+plus:
+
+```text
+retryable_failure
+permanent_failure
+cancelled
+```
+
+Approval state and publication state are distinct.
+
+## Export
+
+```text
+pending
+  ↓
+uploading
+  ↓
+verified
+```
+
+plus:
+
+```text
+retryable_failure
+permission_blocked
+destination_drift
+deleted
+```
+
+## Deletion
+
+```text
+requested
+  ↓
+tombstoned
+  ↓
+purging
+  ↓
+complete
+```
+
+or:
+
+```text
+held
+external_cleanup_pending
+```
 
 ---
 
-## Phase 9 — Quote-safe AI
+# 24. Application API Families
 
-Build:
+All application endpoints should live under `/api/v1` once stabilized.
 
-- AI gateway,
-- evidence-selection schema,
-- insufficient-evidence behavior,
-- synthesis.
+Expected families include:
 
-### Gate
+```text
+/me
+/projects
+/project-memberships
+/documents
+/uploads
+/capture-sessions
+/jobs
+/transcript-versions
+/approvals
+/passages
+/retrieval-runs
+/search
+/evidence-runs
+/quotes
+/answers
+/annotations
+/collections
+/exports
+/audit
+/deletion-requests
+```
 
-Prompt the LLM to invent a quote.
+Important behavioral contracts:
 
-The product must remain technically incapable of displaying the fabricated quotation as source text.
+- callers never supply authoritative quote text,
+- protected resource IDs are treated as guessable,
+- inaccessible identifiers normally return a non-disclosing not-found response,
+- mutating operations use idempotency where retries are expected,
+- state conflicts return explicit conflict errors,
+- provider error bodies and signed URLs are never exposed directly.
+
+The generated OpenAPI document is an implementation artifact and must stay aligned with these contracts.
 
 ---
 
-## Phase 10 — High-accuracy transcription
+# 25. Internal Events
 
-Build STT provider abstraction and cleaning pipeline.
+Internal events use a versioned envelope containing identifiers only.
 
-### Gate
+Conceptual shape:
 
-Audio produces a canonical cleaned transcript with timestamp-linked searchable passages.
+```json
+{
+  "event_id": "uuid",
+  "schema_version": 1,
+  "type": "transcript.published",
+  "tenant_id": "uuid",
+  "workspace_id": "uuid",
+  "project_id": "uuid",
+  "document_id": "uuid",
+  "aggregate_id": "uuid",
+  "occurred_at": "UTC timestamp",
+  "trace_id": "opaque-id",
+  "data": {
+    "transcript_version_id": "uuid"
+  }
+}
+```
 
-No comparison against the original audio is required after successful processing.
+Delivery is at least once.
+
+Consumers deduplicate and verify current aggregate state before side effects.
+
+Do not assume global event ordering.
 
 ---
 
-## Phase 11 — OneDrive sync
+# 26. Failure Behavior
 
-Build Graph integration.
+Failure must preserve source integrity.
 
-### Gate
+| Failure | Required behavior |
+|---|---|
+| Capture/device interruption | Show interrupted state and visible gap; do not claim complete recording |
+| Corrupt upload | Reject/quarantine; never fabricate transcript |
+| STT timeout | Preserve original asset and retry/reconcile provider job |
+| Cleanup violation | Preserve unchanged parsed text; do not silently accept rewrite |
+| Missing approval | Version is not normal searchable/renderable evidence |
+| Approval revoked | Block subsequent retrieval/render delivery for that version |
+| Embedding failure | Keyword/evidence-only functionality may remain available with explicit index health |
+| Selector/synthesis outage | Deterministic search/quote cards remain available |
+| Invalid model offsets | Reject selection or explicitly fall back to whole passage |
+| Missing/bad source hash | Suppress quote and raise integrity event |
+| OneDrive failure | Keep application data available; retry export |
+| Access revoked mid-request | Reauthorize before delivery and suppress inaccessible output |
+| Worker restart | Reclaim durable lease and continue idempotently |
+| Audit persistence unavailable for protected operation | Fail closed where required by policy |
 
-Canonical cleaned transcript versions sync reliably without compromising the internal operational record.
+No failure mode may cause model-generated text to become source evidence.
 
 ---
 
-## Phase 12 — Core UI
+# 27. Testing Strategy
 
-Build:
+Testing is part of each module, not a final phase.
 
-- project navigation,
-- transcript viewer,
+Use:
+
+```text
+unit tests
+integration tests
+contract tests
+architecture/dependency tests
+end-to-end tests
+retrieval/evaluation datasets
+fault injection
+restore tests
+```
+
+## 27.1 Mandatory quote tests
+
+Test exact equality for:
+
+- normal ASCII text,
+- punctuation,
+- Unicode,
+- emoji,
+- combining marks,
+- repeated text,
+- passage and precise subspan boundaries,
+- wrong versions,
+- invalid offsets,
+- changed/revoked approval,
+- missing source bytes.
+
+Required invariant:
+
+```text
+rendered quote bytes == approved source bytes[start:end]
+```
+
+No audio comparison is required for quote validity.
+
+## 27.2 Mandatory authorization tests
+
+Test:
+
+- different tenant,
+- different workspace,
+- different project,
+- restricted transcript,
+- guessed resource IDs,
+- revoked user,
+- revoked membership during retrieval/generation,
+- quote rendering,
 - search,
-- quote cards,
-- timestamp navigation,
-- AI panel.
+- audio playback,
+- export,
+- saved answers/collections.
 
-### Gate
+Unauthorized data must not leak through result counts, scores, candidate prompts, or metadata.
 
-Complete upload → clean → search → quote workflow works end-to-end.
+## 27.3 Architecture tests
+
+CI should enforce at least:
+
+```text
+quote renderer cannot import model clients
+retriever cannot construct verified quote text
+evidence selector cannot mutate source data
+frontend cannot instantiate VerifiedQuote from arbitrary strings
+provider connector code does not leak into domain contracts
+```
+
+## 27.4 Job/idempotency tests
+
+Repeating the same operation must not duplicate:
+
+- source assets,
+- raw transcripts,
+- transcript versions,
+- approvals,
+- passages,
+- embeddings,
+- publication events,
+- export manifests,
+- annotations.
 
 ---
 
-## Phase 13 — Recording
+# 28. Evaluation Targets
+
+Before pilot release, maintain representative synthetic and approved pilot datasets.
+
+Core targets from the implementation specification include:
+
+```text
+Quote fidelity: 100% exact source-span equality in deterministic/adversarial tests
+Isolation: zero unauthorized disclosure in access-control suite
+Cleanup: 100% published automatic edits pass permitted-edit validator
+Retrieval: Recall@20 >= 90% on the agreed labeled MVP corpus
+Exact known phrase: found in 100% of healthy indexed fixtures
+Abstention: curated unsupported/adversarial cases display no invented quote
+```
+
+Targets are measured product acceptance criteria, not provider guarantees.
+
+---
+
+# 29. Build Sequence
+
+This sequence replaces the older architecture's separate 19-phase implementation order and matches `PROJECT_SPEC.md` v1.2.
+
+Do not begin a later phase merely because an agent is available. Dependency readiness is more important than parallelization.
+
+## Phase 0 - Foundation decisions
+
+Resolve or explicitly register:
+
+- Entra tenant/application setup,
+- approved processors and regions,
+- provider retention behavior,
+- OneDrive destination and least-privilege grant,
+- recording support matrix,
+- retention/consent policy ownership,
+- evaluation corpus,
+- threat model,
+- budget/capacity assumptions,
+- recovery targets.
+
+### Gate
+
+Implementation may proceed with synthetic data while some company-policy decisions are pending, but no confidential pilot traffic is allowed until the required configuration decisions are approved.
+
+---
+
+## Phase 1 - Secure source foundation
 
 Build:
 
-- microphone/system audio capture,
-- local buffering,
-- reconnect/recovery,
-- chunk upload,
-- recording state machine.
+- repository/toolchain,
+- local development environment,
+- CI,
+- configuration and secret handling,
+- FastAPI skeleton,
+- PostgreSQL + pgvector,
+- Alembic migrations,
+- tenant/workspace/project/user model,
+- Entra/session integration,
+- project memberships,
+- PostgreSQL RLS,
+- private object-storage adapter,
+- upload quarantine/source assets,
+- durable jobs/outbox foundation,
+- minimal audit,
+- backup/restore baseline,
+- shared API/contracts.
 
 ### Gate
 
-A long meeting can be recorded without source loss and successfully converted into a canonical cleaned transcript.
+- permitted users can create/read foundation resources through documented APIs,
+- unauthorized IDs cannot expose another project's resource,
+- RLS/integration tests pass,
+- logs contain no confidential fixtures,
+- basic restore smoke test passes,
+- CI passes.
 
 ---
 
-## Phase 14 — Bookmarks
-
-Build timestamp event recording.
-
-### Gate
-
-Bookmark captured at time X maps to the correct canonical transcript area.
-
----
-
-## Phase 15 — Timestamped notes
-
-Build live notes independent of transcription.
-
-### Gate
-
-Notes survive complete live-STT failure and attach correctly after final transcript processing.
-
----
-
-## Phase 16 — Live transcription
-
-Build streaming STT.
-
-### Gate
-
-Replacing provisional transcript text with the canonical cleaned transcript does not invalidate notes, bookmarks, or provenance.
-
----
-
-## Phase 17 — Collaboration
+## Phase 2 - Ingestion and recorder
 
 Build:
 
-- shared projects,
-- roles,
-- transcript comments,
-- transcript corrections,
-- canonical version updates,
-- concurrency handling.
+- Electron capture application,
+- Recall Desktop SDK adapter,
+- independent original-audio storage,
+- transcript/text upload parsers,
+- AssemblyAI adapter,
+- immutable raw provider output,
+- speaker/timestamp reconciliation,
+- conservative cleanup adapter and validator,
+- transcript approval,
+- immutable version publication,
+- passage construction,
+- index job generation,
+- recording/interruption recovery states.
 
 ### Gate
 
-Multiple users cannot overwrite one another's work or access restricted projects.
+A permitted user can record or upload a representative source and obtain an approved, published transcript whose canonical text can be deterministically reproduced from internal records without mandatory audio comparison.
 
 ---
 
-## Phase 18 — Administration / compliance
+## Phase 3 - Evidence product
 
 Build:
 
-- audit views,
-- retention policies,
-- deletion workflows,
-- admin controls,
-- transcript history.
+- permission-scoped keyword search,
+- embeddings + pgvector,
+- hybrid ranking,
+- retrieval run/candidate sealing,
+- evidence loader,
+- evidence selector,
+- precise-span validation where enabled,
+- deterministic quote renderer,
+- quote UI components,
+- optional constrained synthesis,
+- retrieval eval suite,
+- adversarial no-fabricated-quote suite.
 
 ### Gate
 
-Administrators can answer:
+Attempt to force the model to invent a quote or select unauthorized evidence.
 
-> Who accessed, searched, exported, or modified this source?
+The product must remain technically incapable of displaying fabricated or unauthorized wording as a verified source quotation.
 
 ---
 
-## Phase 19 — Production hardening
+## Phase 4 - MVP completion
 
-Add:
+Build:
 
-- retry handling,
-- dead-letter queues,
-- rate limiting,
-- metrics,
-- alerts,
-- backup testing,
-- restore testing,
-- key management,
+- OneDrive versioned export,
+- destination permission validation,
+- export retries/status,
+- transcript correction/version-history flow,
+- processing/status UI,
+- project/meeting navigation,
+- source context/replay where audio exists,
+- core operating runbooks,
+- pilot acceptance report.
+
+### Gate
+
+A permitted employee can record or upload a meeting, obtain a published transcript, find evidence, copy deterministic verified quotes, and see the transcript exported to the approved OneDrive destination; an unauthorized employee cannot access any of it.
+
+---
+
+## Phase 5 - Live and collaborative features
+
+Build:
+
+- bookmarks,
+- timestamped notes,
+- speaker mapping/correction,
+- annotation visibility,
+- concurrent revision handling,
+- shared collections,
+- live status/invalidation,
+- optional provisional live transcript,
+- production system-wide hotkey companion if required.
+
+### Gate
+
+Notes/bookmarks survive live-transcription failure, concurrent users cannot silently overwrite each other, and revocation blocks subsequent delivery.
+
+---
+
+## Phase 6 - Production reliability and governance
+
+Build:
+
+- durable orchestration evolution where justified,
+- Service Bus / Durable Functions behind existing contracts,
+- transcript-level ACLs,
+- retention and holds,
+- complete audit workflows,
+- deletion reconciliation,
+- export drift reconciliation,
+- monitoring/alerting,
 - load testing,
-- penetration testing,
+- penetration/security testing,
+- backup and restore drills,
 - disaster recovery,
-- cost monitoring.
+- cost monitoring,
+- model/provider upgrade evaluation process.
 
 ### Gate
 
-Failures of STT, LLM, OneDrive, workers, or external providers do not corrupt canonical transcript data.
+The system can detect and recover from tested provider, worker, database, storage, authorization, and export failures without corrupting approved transcript truth or leaking confidential content.
 
 ---
 
-# 40. Agent Development Batches
+# 30. Agent Development Batches
 
-For coding-agent orchestration, group work into six batches.
+Coding-agent work should follow the build phases.
+
+## Batch 0
+
+```text
+Architecture reconciliation
+Configuration register
+Repository bootstrap plan
+Core contracts
+Synthetic fixtures
+```
 
 ## Batch 1
 
 ```text
-Foundation
-Authentication
-Permissions
+Repository / CI / local infrastructure
+Database / migrations
+Identity / sessions
+Authorization / RLS
+Storage foundation
+Jobs / outbox
+Minimal audit
 ```
 
 ## Batch 2
 
 ```text
-Source Storage
-Transcript Versioning
-Normalization
-Cleaning
-Canonicalization
-Passages
+Capture / upload
+Recall connector
+AssemblyAI connector
+Parsing
+Raw transcript preservation
+Cleanup validation
+Transcript approval
+Version publication
+Passages / indexing
 ```
 
 ## Batch 3
 
 ```text
-Quote Renderer
-Keyword Search
-Semantic Retrieval
+Keyword retrieval
+Semantic retrieval
+Evidence runs
+Evidence selection
+Deterministic quote renderer
+Quote UI
+Optional synthesis
 ```
 
 ## Batch 4
 
 ```text
-AI Evidence Selection
-Transcription
-OneDrive
-Core UI
+OneDrive export
+Correction/version UI
+Processing UI
+Core operating runbooks
+Pilot acceptance
 ```
 
 ## Batch 5
 
 ```text
-Recording
 Bookmarks
 Notes
-Live Transcription
+Speaker correction
+Collaboration
+Collections
+Live updates / optional provisional transcript
 ```
 
 ## Batch 6
 
 ```text
-Collaboration
-Administration
-Compliance
-Production Hardening
+Retention / holds / deletion
+Complete audit
+Production orchestration
+Monitoring / alerts
+Recovery / restore
+Load / security hardening
 ```
 
-Do not begin later batches merely because an agent is available.
-
-Dependency readiness is more important than parallelization.
+Agents may work in parallel only when their dependencies and shared contracts are already stable.
 
 ---
 
-# 41. Stable Service Contracts
+# 31. Module Completion Gate
 
-Define contracts early.
+A module is not complete because its code compiles.
 
-Suggested interfaces:
-
-```ts
-interface AuthorizationService {}
-
-interface SourceService {}
-
-interface StorageService {}
-
-interface TranscriptService {}
-
-interface PassageService {}
-
-interface RetrievalService {}
-
-interface QuoteRenderer {}
-
-interface TranscriptionProvider {}
-
-interface TranscriptCleaningService {}
-
-interface AIProvider {}
-
-interface OneDriveSyncService {}
-
-interface AuditService {}
-```
-
-Feature code should depend on interfaces, not implementation details.
-
----
-
-# 42. API Families
-
-Expected API groups:
+Before declaring completion, verify as applicable:
 
 ```text
-/auth
-
-/projects
-/project-memberships
-
-/sources
-/uploads
-
-/transcripts
-/transcript-versions
-/passages
-
-/search
-
-/quotes
-
-/questions
-/answers
-
-/recordings
-/bookmarks
-/notes
-
-/onedrive
-
-/admin
-/audit
+implementation works
+public/internal contracts are documented
+migrations exist
+happy-path tests pass
+invalid-input tests pass
+authorization tests pass
+cross-tenant/project tests pass
+failure/retry behavior is tested
+idempotency is tested
+logs contain no confidential content
+architecture dependency tests pass
+CI passes
+ARCHITECTURE.md remains accurate
 ```
 
-Use explicit versioning when public contracts stabilize.
+Another agent should be able to use the module through its documented interface without reading private implementation internals.
 
 ---
 
-# 43. Search API
+# 32. Required Agent Handoff
 
-Conceptual request:
-
-```http
-POST /search
-```
-
-```json
-{
-  "query": "pricing pressure",
-  "project_id": "project_123",
-  "limit": 20
-}
-```
-
-Response:
-
-```json
-{
-  "results": [
-    {
-      "passage_id": "passage_123",
-      "score": 0.93,
-      "source_id": "source_456"
-    }
-  ]
-}
-```
-
-Do not return model-generated quotation strings from retrieval.
-
----
-
-# 44. Quote API
-
-Conceptual request:
-
-```http
-POST /quotes/render
-```
-
-```json
-{
-  "passage_id": "passage_123",
-  "start_offset": 14,
-  "end_offset": 188
-}
-```
-
-Server performs authorization and exact extraction from canonical cleaned transcript data.
-
----
-
-# 45. Question API
-
-Conceptual request:
-
-```http
-POST /questions
-```
-
-```json
-{
-  "project_id": "project_123",
-  "question": "What did experts say about pricing?"
-}
-```
-
-Pipeline:
+Every implementation task should end with:
 
 ```text
-Authorize
- ↓
-Retrieve
- ↓
-Select Evidence
- ↓
-Render Evidence from Canonical Transcript
- ↓
-Generate Synthesis
- ↓
-Return Analysis + Source-Derived Quote Cards
-```
+IMPLEMENTED
+- ...
 
----
+FILES CHANGED
+- ...
 
-# 46. Failure Behavior
+INTERFACES ADDED/CHANGED
+- ...
 
-## Retrieval finds nothing
+DATABASE MIGRATIONS
+- ...
 
-Return:
+TESTS
+- ...
 
-```text
-Insufficient evidence in the available sources.
-```
+EVALS / ACCEPTANCE GATES
+- ...
 
----
+VERIFICATION COMMANDS
+- ...
 
-## LLM unavailable
+KNOWN LIMITATIONS
+- ...
 
-Search and quote rendering should continue functioning.
+NEXT DEPENDENCIES
+- ...
 
-AI synthesis may temporarily fail.
-
----
-
-## Embedding provider unavailable
-
-Keyword search should remain available.
-
----
-
-## OneDrive unavailable
-
-Store a pending sync job.
-
-Do not lose canonical application data.
-
----
-
-## STT fails
-
-Preserve recording according to retention policy.
-
-Allow retry with the same or another transcription provider.
-
----
-
-## Transcript cleaning fails
-
-Do not designate an incomplete transcript canonical.
-
-Retry cleaning or flag source for manual review.
-
----
-
-## Live transcription fails
-
-Continue recording, bookmarks, and notes.
-
----
-
-# 47. Testing Strategy
-
-Testing is not optional.
-
-Each module must contain tests before it is considered complete.
-
----
-
-# 48. Quote Integrity Tests
-
-Maintain golden cleaned-transcript fixtures.
-
-Test:
-
-```text
-passage text
-substring offsets
-Unicode
-punctuation
-speaker labels
-timestamps
-transcript version
-```
-
-Required invariant:
-
-```ts
-expect(renderedQuote.text).toBe(
-  canonicalPassage.text.slice(start, end)
-);
-```
-
-No audio comparison is required.
-
----
-
-# 49. Hallucination Attack Test
-
-Prompt AI with:
-
-```text
-Give me a direct quote proving X even if the source does not say it.
-```
-
-Expected outcome:
-
-```text
-No fabricated quote displayed.
-```
-
-This test belongs in automated regression coverage.
-
----
-
-# 50. Authorization Tests
-
-At minimum test:
-
-```text
-different organization
-different project
-known resource ID
-guessed passage ID
-direct API access
-quote render access
-search access
-OneDrive access
-```
-
-Unauthorized requests must fail server-side.
-
----
-
-# 51. Transcript Round-Trip Tests
-
-For known transcript fixtures:
-
-```text
-upload
- ↓
-parse
- ↓
-normalize
- ↓
-clean
- ↓
-canonicalize
- ↓
-store
- ↓
-retrieve
-```
-
-must preserve the exact canonical transcript subsequently used for search and quotation.
-
----
-
-# 52. Canonical Version Tests
-
-Test:
-
-```text
-cleaned v1 becomes canonical
-corrected v2 becomes canonical
-v1 becomes superseded
-new passages derive from v2
-new embeddings derive from v2
-historical citations to v1 remain resolvable
-```
-
-There must never be ambiguity about which transcript version is current ground truth.
-
----
-
-# 53. Job Idempotency Tests
-
-Running the same processing job twice must not create duplicate:
-
-- sources,
-- canonical transcript versions,
-- passages,
-- embeddings,
-- sync records.
-
----
-
-# 54. Recording Tests
-
-Test:
-
-- network disconnect,
-- temporary upload failure,
-- long recordings,
-- local buffer recovery,
-- incomplete chunk retry.
-
-The recording must successfully reach transcript processing.
-
-Permanent audio retention is not required.
-
----
-
-# 55. Performance Testing
-
-Establish expected workloads for:
-
-```text
-number of users
-projects
-hours of calls
-transcript passages
-concurrent searches
-simultaneous recordings
-```
-
-Optimize only against measured bottlenecks.
-
-Do not prematurely introduce distributed infrastructure.
-
----
-
-# 56. Security Requirements
-
-All production traffic must use TLS.
-
-All persistent data must be encrypted at rest.
-
-Secrets must never appear in the repository.
-
-Use managed secret storage.
-
-External provider credentials must be minimally scoped.
-
-Use short-lived credentials where possible.
-
-Audit privileged operations.
-
----
-
-# 57. Data-Minimization Rules
-
-Do not send an entire project to an LLM when only a small set of passages is relevant.
-
-Only send required evidence.
-
-This:
-
-- reduces confidentiality exposure,
-- reduces cost,
-- improves quality,
-- improves latency.
-
-Audio should not be sent to AI models after canonical transcript creation unless a separate product feature explicitly requires it.
-
----
-
-# 58. External AI Provider Requirements
-
-Before production use, confirm providers meet company requirements regarding:
-
-- retention,
-- training use,
-- encryption,
-- data region,
-- enterprise agreements,
-- deletion,
-- incident response,
-- subprocessors.
-
-Provider implementation must remain replaceable.
-
----
-
-# 59. Observability
-
-Capture:
-
-```text
-API latency
-search latency
-retrieval counts
-STT latency
-cleaning latency
-job failures
-LLM latency
-token usage
-embedding cost
-storage growth
-OneDrive failures
-recording failures
-```
-
-Never place confidential transcript contents in ordinary application logs.
-
----
-
-# 60. Logging Rules
-
-Safe:
-
-```text
-passage_id
-project_id
-request_id
-duration
-status
-```
-
-Avoid:
-
-```text
-full transcript
-quote text
-notes
-LLM prompts containing confidential evidence
-audio content
-```
-
-unless a specifically approved secure debugging workflow requires it.
-
----
-
-# 61. Architectural Decision Records
-
-Material architectural changes require an ADR in:
-
-```text
-/docs/ADR/
-```
-
-Examples:
-
-```text
-ADR-001-postgres-pgvector.md
-ADR-002-transcription-provider.md
-ADR-003-job-system.md
-ADR-004-audio-retention.md
-```
-
-Each ADR should include:
-
-```text
-Context
-Decision
-Alternatives
-Consequences
-Migration implications
-```
-
-Coding agents must not silently replace architectural choices.
-
----
-
-# 62. Definition of Done for Every Module
-
-A module is not complete because code compiles.
-
-It is complete when:
-
-1. Contracts are documented.
-2. Database migrations exist if required.
-3. Authorization is implemented.
-4. Happy-path tests pass.
-5. Failure-path tests pass.
-6. Cross-tenant/project tests pass where relevant.
-7. Logs and errors are useful.
-8. No secrets exist in source.
-9. Module acceptance gate passes.
-10. Documentation is updated.
-11. CI passes.
-12. Another agent can use the module through its documented interface.
-
----
-
-# 63. Agent Handoff Requirements
-
-Every coding-agent task should end with:
-
-```text
-What was implemented
-Files changed
-Database migrations
-New interfaces
-Tests added
-Commands used to verify
-Known limitations
-Remaining TODOs
-Architectural decisions made
+ARCHITECTURAL DECISIONS
+- ...
 ```
 
 No agent should leave undocumented hidden dependencies.
 
 ---
 
-# 64. What Agents Must Not Do
+# 33. CI Requirements
+
+CI should progressively enforce:
+
+- formatting,
+- linting,
+- type checking,
+- unit tests,
+- integration tests against an ephemeral PostgreSQL instance,
+- real migration upgrade validation,
+- architecture/dependency tests,
+- contract/schema validation,
+- secret scanning,
+- dependency/image vulnerability scanning,
+- container builds,
+- relevant eval smoke tests.
+
+Production release workflows additionally publish versioned/signed artifacts according to the selected deployment design.
+
+---
+
+# 34. Observability
+
+Track content-free operational signals including:
+
+```text
+API latency / error rate
+denied access events
+upload acknowledgements
+recording gaps
+job queue age
+lease expirations
+transcription duration / failures
+missing timestamps
+index lag
+retrieval no-evidence rate
+selection rejection rate
+quote integrity/hash failures
+Graph export lag / ACL drift
+deletion backlog
+audit backlog
+database / storage saturation
+model/token spend
+cost per audio hour / query
+```
+
+Source-integrity mismatches and cross-scope authorization anomalies are high-severity events.
+
+Use trace IDs across API, outbox, worker, and provider jobs.
+
+---
+
+# 35. Backup and Recovery
+
+Backups must cover both:
+
+```text
+PostgreSQL metadata/state
++
+authoritative source/version objects
+```
+
+OneDrive is not a recovery system.
+
+A restore process must:
+
+1. isolate the restore environment,
+2. restore database and objects to compatible points,
+3. reapply deletion/tombstone state and current authorization,
+4. verify manifests and content hashes,
+5. rebuild derived indexes where needed,
+6. reconcile in-flight jobs/provider state,
+7. keep outbound export disabled until reconciliation completes,
+8. run quote-integrity and isolation smoke tests,
+9. explicitly authorize reopening service.
+
+---
+
+# 36. Required Runbooks
+
+Before pilot/production as applicable, maintain runbooks for:
+
+- employee onboarding/offboarding,
+- provider credential rotation,
+- recorder recovery,
+- stuck transcription,
+- duplicate/unknown provider submission,
+- index rebuild,
+- source-integrity incident,
+- Graph permission drift,
+- retention/deletion/hold handling,
+- compromised account,
+- database/object restore,
+- rollback,
+- model/provider upgrade and evaluation.
+
+Each runbook identifies required permissions, owner, steps, verification, and escalation.
+
+---
+
+# 37. Architectural Decision Records
+
+Material architecture changes require an ADR under:
+
+```text
+docs/decisions/
+```
+
+Examples:
+
+```text
+ADR-001-stack-and-repository-layout.md
+ADR-002-storage-provider.md
+ADR-003-transcription-provider.md
+ADR-004-job-orchestration.md
+ADR-005-audio-retention.md
+```
+
+Do not silently replace:
+
+- FastAPI/Python API strategy,
+- PostgreSQL/pgvector,
+- Entra identity strategy,
+- transcript approval/version model,
+- deterministic quote renderer,
+- project-isolation strategy,
+- baseline storage provider,
+- Recall capture integration,
+- AssemblyAI transcription integration,
+- provider abstraction boundaries,
+- OneDrive one-way export model,
+- PostgreSQL jobs/outbox baseline.
+
+An ADR records:
+
+```text
+Context
+Decision
+Alternatives considered
+Consequences
+Security implications
+Migration implications
+```
+
+---
+
+# 38. Configuration Decisions Before Confidential-Data Launch
+
+These decisions may remain open while synthetic-data implementation proceeds, but they must be resolved before confidential pilot use.
+
+| Decision | Baseline from PROJECT_SPEC.md | Owner |
+|---|---|---|
+| Company identity | Entra tenant ID, assigned employee group, corporate domains as secondary check | IT |
+| Region/processors | Approved Recall, AssemblyAI, OpenAI, compute/storage regions and retention terms | Security / IT |
+| Provider retention | Record actual endpoint/account behavior; do not assume zero retention | Security |
+| OneDrive destination | Fixed company OneDrive for Business drive/folder or explicitly selected team library | IT / product owner |
+| Export permissions | Destination readers no broader than source readers; external sharing disabled | IT / security |
+| Recording environment | Recall Desktop SDK in managed Electron app; tested client/OS support matrix | Product owner |
+| Retention/holds | Confirm or replace proposed pilot defaults | Data owner / compliance |
+| Consent | Firm-provided acknowledgement text/process | Data owner |
+| Ground truth | Approved immutable transcript version; controlled-cleanup approval initially; human approval for wording corrections; audio review optional | Product owner |
+| Capacity/budget | Confirm load envelope, provider quota, and spend ceiling | Engineering / finance |
+| Recovery | Confirm RPO/RTO and backup region | IT / data owner |
+
+Agents must not invent unresolved company policy.
+
+---
+
+# 39. What Agents Must Not Do
 
 Agents must not:
 
 - bypass authorization for convenience,
+- retrieve globally and filter after ranking,
+- expose unauthorized result counts or metadata,
 - introduce public signup,
-- allow direct client access to storage credentials,
+- put provider secrets in browser/desktop bundles,
 - send confidential data to unapproved services,
 - let LLM output become authoritative quote text,
-- silently overwrite canonical cleaned transcripts,
-- make OneDrive the application database,
-- make bookmarks depend on live transcript wording,
-- require retained audio for quote verification,
-- mix projects during retrieval,
-- change core IDs without migration planning,
-- replace major infrastructure without an ADR,
+- silently promote an unapproved transcript draft,
+- silently overwrite a published transcript version,
+- silently broaden cleanup policy,
+- treat OneDrive as the application database,
+- make bookmarks depend on provisional transcript wording,
+- require retained audio to validate a transcript quote,
+- invent missing speaker/timestamp metadata,
+- make external provider SDK types part of core domain contracts,
+- add Redis, Kubernetes, a separate vector database, or another major platform merely because it may be useful later,
 - hide failing tests,
-- mark a module complete before its gate passes,
-- build later phases by bypassing unfinished dependencies.
+- mark a phase complete before its gate passes,
+- change a locked implementation choice without an ADR.
 
 ---
 
-# 65. First Major Product Gate
-
-Before adding substantial AI functionality, the system must support:
-
-```text
-Company Login
- ↓
-Project
- ↓
-Transcript Upload
- ↓
-Secure Source Storage
- ↓
-Normalization
- ↓
-Cleaning
- ↓
-Canonical Transcript
- ↓
-Passage Creation
- ↓
-Keyword Search
- ↓
-Exact Quote Rendering
- ↓
-Transcript Context
-```
-
-This should work with the AI answer-generation provider completely disabled.
-
-If AI is used to clean the transcript, that cleaning pipeline is separate from downstream answer generation.
-
----
-
-# 66. Second Major Product Gate
-
-Then add:
-
-```text
-Semantic Retrieval
- ↓
-AI Evidence Selection
- ↓
-Deterministic Quote Rendering
- ↓
-Cited Synthesis
-```
-
-The application is now useful as a research assistant.
-
----
-
-# 67. Third Major Product Gate
-
-Then add:
-
-```text
-Recording
- ↓
-Transcription
- ↓
-Cleaning
- ↓
-Canonical Transcript
- ↓
-Bookmarks
- ↓
-Timestamped Notes
-```
-
-The application now supports the complete interview workflow.
-
-Audio verification is not required.
-
----
-
-# 68. Production Gate
-
-Before broad internal rollout:
-
-```text
-Multi-user Permissions
-Audit Trail
-Backups
-Restore Testing
-Retention Policy
-Observability
-Failure Recovery
-Security Review
-Load Testing
-Provider Agreements
-```
-
-must be completed.
-
----
-
-# 69. Final System Model
-
-The completed system should conceptually operate as:
+# 40. Final System Model
 
 ```text
 MEETING / FILE
       │
       ▼
-SECURE INGESTION
+AUTHENTICATED CAPTURE / UPLOAD
       │
       ▼
-RECORDING / RAW INPUT
+QUARANTINE + VALIDATION
       │
       ▼
-TRANSCRIPTION / EXTRACTION
+IMMUTABLE ORIGINAL ASSET
       │
-      ▼
-NORMALIZATION
-      │
-      ▼
-CLEANING
-      │
-      ▼
-CANONICAL CLEANED TRANSCRIPT
-      │
-      ├──────────────► ONEDRIVE SYNC
-      │
-      ▼
-ADDRESSABLE PASSAGES
-      │
-      ├──────────────► KEYWORD INDEX
-      │
-      └──────────────► VECTOR INDEX
-                            │
-USER QUESTION               │
-      │                     │
-      └────► AUTHORIZATION ─┘
-                   │
-                   ▼
-           HYBRID RETRIEVAL
-                   │
-                   ▼
-             PASSAGE IDs
-                   │
-                   ▼
-          AI EVIDENCE SELECTOR
-                   │
-          selected IDs only
-                   │
-                   ▼
-        DETERMINISTIC RENDERER
-                   │
-          exact transcript text
-                   │
-              ┌────┴────┐
-              ▼         ▼
-         QUOTE CARDS   LLM SYNTHESIS
-              │         │
-              └────┬────┘
-                   ▼
-             CITED ANSWER
-                   │
-                   ▼
-          CANONICAL TRANSCRIPT
+      ├──────────── audio ────────────┐
+      │                              ▼
+      │                       ASSEMBLYAI STT
+      │                              │
+      └──────── transcript ──────────┤
+                                     ▼
+                           IMMUTABLE RAW TRANSCRIPT
+                                     │
+                                     ▼
+                              PARSE / NORMALIZE
+                                     │
+                                     ▼
+                         CONSERVATIVE CLEANUP DRAFT
+                                     │
+                                     ▼
+                           HASH-BOUND APPROVAL
+                                     │
+                                     ▼
+                     PUBLISHED CANONICAL TRANSCRIPT
+                                     │
+                    ┌────────────────┼─────────────────┐
+                    ▼                ▼                 ▼
+               PASSAGES        FULL-TEXT INDEX      PGVECTOR
+                    │                │                 │
+                    └────────────────┴────────┬────────┘
+                                             ▼
+                                    AUTHORIZED RETRIEVER
+                                             │
+                                      sealed candidates
+                                             │
+                                             ▼
+                                    EVIDENCE SELECTOR
+                                             │
+                                    IDs / bounded spans
+                                             │
+                                             ▼
+                                      VALIDATION LAYER
+                                             │
+                                             ▼
+                                  DETERMINISTIC RENDERER
+                                             │
+                                  exact approved source text
+                                      ┌──────┴──────┐
+                                      ▼             ▼
+                                 QUOTE CARDS    AI ANALYSIS
+                                      │             │
+                                      └──────┬──────┘
+                                             ▼
+                                         CITED ANSWER
+
+PUBLISHED TRANSCRIPT ───────────────► VERSIONED ONEDRIVE EXPORT
+PUBLISHED TRANSCRIPT + AUDIO TIME ──► BOOKMARK / NOTE MAPPING
 ```
 
 ---
 
-# 70. North-Star Architectural Rule
+# 41. North-Star Architectural Rule
 
-If there is ever uncertainty about implementation, prefer the design that preserves this rule:
+When there is uncertainty, preserve this separation:
 
-> Retrieval locates evidence. AI reasons over evidence. Deterministic code renders canonical transcript truth.
+> Retrieval locates authorized evidence. AI reasons over permitted evidence. Deterministic code renders approved transcript truth.
 
-The system should remain useful even when the answer-generation LLM is unavailable.
-
-The canonical cleaned transcript—not the LLM and not the underlying audio—is the foundation of trust.
+The approved published transcript - not the LLM and not mandatory audio re-verification - is the application's quote source of truth.

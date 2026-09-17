@@ -10,6 +10,12 @@ ARCHITECTURE.md
 
 `ARCHITECTURE.md` is the source of truth for architecture, module boundaries, security rules, build order, and acceptance gates.
 
+This file defines agent workflow and summarizes architectural requirements. If a summary or instruction here conflicts with `ARCHITECTURE.md`, follow `ARCHITECTURE.md` and reconcile the stale instruction. Agent workflow rules and task plans do not override the architecture.
+
+Read the relevant architecture sections, `PROJECT_SPEC.md`, approved ADRs under `docs/decisions/`, and the active task plan before implementation. Use the repository layout in architecture §5 and canonical identifiers in §8; do not introduce competing layouts or names.
+
+For foundation implementation, read `docs/DATA_MODEL.md`, `docs/API_CONTRACTS.md`, and `docs/SECURITY.md`. Follow `schemas/README.md` for the single contract-generation workflow; edit the Python contract sources, not generated OpenAPI, JSON schemas, or TypeScript declarations.
+
 If your task conflicts with it, do not silently change the architecture. Document the conflict and create an ADR if a material design change is required.
 
 An agent MUST NOT create, submit, or mark a pull request
@@ -21,17 +27,58 @@ exits with code 0.
 
 ---
 
+## Model Routing
+
+KaniorAI uses explicit model routing to control cost and match model capability
+to task difficulty.
+
+The authoritative routing policy is:
+
+    docs/MODEL_ROUTING.md
+
+Unless a task plan explicitly specifies otherwise:
+
+- Terra: routine implementation, mechanical and deterministic edits
+- Sol: default model for substantial engineering work
+- Astra: high-complexity, high-risk, architectural, or unresolved work
+
+Default model: Sol.
+
+Use the cheapest model reasonably expected to complete the task correctly.
+
+Escalation order:
+
+   Terra → Sol → Astra
+
+Escalate when:
+
+- the task crosses multiple architectural boundaries;
+- significant ambiguity exists;
+- security, authorization, data integrity, or reliability is involved;
+- the task requires architectural decisions;
+- an implementation approach has failed repeatedly;
+- debugging requires system-wide reasoning;
+- acceptance tests cannot be made to pass despite reasonable attempts.
+
+Do not use Astra for routine implementation merely because it is available.
+
+After Astra diagnoses or plans a difficult problem, routine implementation SHOULD
+be delegated back to Sol or Terra when practical.
+
+Task-specific model assignments in an approved active plan override the default
+routing guidance.
+
 # Core Mission
 
 Build a secure internal transcript-intelligence system that:
 
 1. records or imports confidential research calls,
-2. creates searchable timestamped transcripts,
+2. preserves raw artifacts and publishes approved, immutable transcript versions,
 3. retrieves relevant evidence,
-4. guarantees displayed quotations are exact source text,
-5. links quotes to transcript/audio provenance,
-6. isolates users/projects correctly,
-7. supports OneDrive synchronization,
+4. guarantees verified quotations are exact contiguous spans of approved, published transcript text,
+5. links quotes to pinned transcript versions and audio provenance where available,
+6. isolates tenants, workspaces, projects, and restricted documents correctly,
+7. supports one-way versioned OneDrive export,
 8. later supports live bookmarks, timestamped notes, and collaboration.
 
 ---
@@ -40,33 +87,35 @@ Build a secure internal transcript-intelligence system that:
 
 ## 1. LLMs never author authoritative quote text
 
-The LLM may select:
+Follow architecture §§3, 14–16. The default selector returns allowed passage IDs from a server-sealed retrieval run. A separately validated precise-span mode may select:
 
 ```text
 passage_id
-start_offset
-end_offset
+start_character
+end_character
 ```
 
-The server must fetch quote text from the stored transcript.
+Selector character positions are zero-based Unicode code-point offsets within the exact supplied passage text, start inclusive/end exclusive. Deterministic server code validates them, converts them to absolute UTF-8 byte offsets, and issues a `source_span_id`. Browser UTF-16 indexes are never canonical source offsets.
 
-Never trust a model-provided `quote_text` field.
+The server must fetch quote text from the pinned, approved, published transcript. Reject model-provided quote text, provenance, hashes, versions, source span IDs, unexpected fields, and selections outside the sealed run.
 
 ---
 
 ## 2. Every quote has provenance
 
-Every quote must map to:
+Every quote must retain its pinned source and approval provenance under architecture §§8–9 and 15, including:
 
 ```text
+source_span_id
 passage_id
-source_id
+document_id
 transcript_version_id
-speaker
-timestamp
+approval reference
+source and span hashes
+absolute byte offsets
 ```
 
-where available.
+Speaker, original audio references, and timing are nullable when unavailable. Never invent them. Audio review is optional; quote validity does not require audio comparison or retained audio.
 
 ---
 
@@ -74,11 +123,13 @@ where available.
 
 Never search unauthorized content and filter afterward.
 
+Apply tenant/workspace/project scope, document restrictions, publication/approval state, retention state, and current user permissions before ranking or limiting. Do not leak unauthorized counts, scores, snippets, or metadata. The evidence loader reauthorizes before sending candidate text to the selector.
+
 ---
 
 ## 4. Quote rendering re-checks authorization
 
-Knowing or guessing a passage ID must not grant access.
+Knowing or guessing a passage/span ID, possessing a stale candidate set, or reopening a saved answer must not grant access. Recheck current authorization and approval before delivery or export.
 
 ---
 
@@ -94,13 +145,17 @@ corrected transcript
 approved transcript
 ```
 
-Create versions.
+Create versions. Only approved, published versions enter normal evidence search. Approval binds to the exact content hash; corrections require a new version and approval. Revocation blocks subsequent retrieval and quote delivery for the affected version.
+
+Follow architecture §§10–12 for cleanup, approval, and publication. Automatic cleanup may only apply deterministically validated policy-allowed formatting edits. Invalid cleanup preserves unchanged parsed text and still passes through approval. Do not silently broaden cleanup to wording changes. Publish the active version pointer and outbox event atomically after the required lineage, approval, passage, index, and concurrency checks.
 
 ---
 
-## 6. OneDrive is a sync destination
+## 6. OneDrive is a one-way versioned export destination
 
 Do not use OneDrive as the operational database.
+
+Follow architecture §19 for immutable version exports, destination permission validation, retries, and drift reconciliation. Destination readers must not exceed authorized source readers.
 
 ---
 
@@ -112,57 +167,25 @@ Bookmarks and notes attach to recording timestamps, not transient transcript wor
 
 ## 8. Confidential data stays out of logs
 
-Do not log transcript text, note bodies, raw audio, or full confidential prompts in standard application logging.
+Do not put transcript text, note bodies, raw audio, confidential prompts/model responses, access tokens, or signed URLs in standard logs, traces, metrics, or error events. Query text requires an explicitly approved diagnostic policy. Use identifiers, timings, counts, states, and safe error codes instead.
 
 ---
 
 # Required Development Order
 
-Respect dependency order.
+Follow the authoritative build sequence and phase gates in architecture §29 and agent batches in §30:
 
-```text
-Foundation
- ↓
-Authentication / Permissions
- ↓
-Source Data Model
- ↓
-Upload / Storage
- ↓
-Transcript Normalization
- ↓
-Exact Quote Renderer
- ↓
-Keyword Search
- ↓
-Semantic Retrieval
- ↓
-AI Evidence Selection
- ↓
-Transcription
- ↓
-Audio Alignment
- ↓
-OneDrive
- ↓
-Core UI
- ↓
-Recording
- ↓
-Bookmarks
- ↓
-Notes
- ↓
-Live Transcription
- ↓
-Collaboration
- ↓
-Admin / Compliance
- ↓
-Production Hardening
-```
+0. Foundation decisions.
+1. Secure source foundation.
+2. Ingestion and recorder.
+3. Evidence product.
+4. MVP completion.
+5. Live and collaborative features.
+6. Production reliability and governance.
 
 Do not implement a later phase by bypassing an unfinished foundational interface.
+
+Parallel work requires stable dependencies and shared contracts. Synthetic-data implementation may proceed while the company-policy decisions in architecture §38 remain open; confidential pilot traffic must wait for the required approvals. Agents must not invent unresolved company policy.
 
 ---
 
@@ -170,18 +193,22 @@ Do not implement a later phase by bypassing an unfinished foundational interface
 
 Depend on contracts, not implementation details.
 
-Examples:
+Use the conceptual interfaces in architecture §7 and the task's documented contracts. Examples:
 
-```ts
-RetrievalService.searchPassages(...)
-QuoteRenderer.renderQuote(...)
+```text
+RetrievalService.search_passages(...)
+EvidenceSelector.select(...)
+QuoteRenderer.render(...)
 TranscriptionProvider.transcribe(...)
-AIProvider.selectEvidence(...)
-OneDriveSyncService.sync(...)
+TranscriptApprovalService.approve(...)
+TranscriptPublisher.publish(...)
+ExportService.export(...)
 AuthorizationService.authorize(...)
 ```
 
 Do not reach directly into another package's database tables when a service contract exists.
+
+Keep provider access behind connector/adapter boundaries; provider SDK types must not leak into domain contracts. The retriever cannot construct verified quotes, the selector cannot mutate source records, and the renderer cannot import model clients. Frontend code must use generated/shared contracts and cannot construct verified quotes from arbitrary strings.
 
 ---
 
@@ -190,7 +217,7 @@ Do not reach directly into another package's database tables when a service cont
 1. Identify the architecture phase.
 2. Identify dependencies.
 3. Read relevant interfaces and tests.
-4. Confirm the previous phase's gate is satisfied.
+4. Confirm prerequisite phase gates are satisfied, respecting the synthetic-data allowance in Phase 0.
 5. Reuse existing contracts.
 6. Avoid unrelated refactoring.
 
@@ -220,14 +247,20 @@ Do not introduce infrastructure merely because it might be useful later.
 All resource access must be scoped by:
 
 ```text
-organization
+tenant
+workspace
 project
-resource permission
+document restrictions where applicable
+current resource/action permission
 ```
 
 Test access using direct API calls, not merely UI behavior.
 
 Any endpoint receiving an ID must assume that ID may have been guessed.
+
+Follow architecture §§20–21 for Entra employee assignment, server sessions, roles, and defense in depth. Enforce API/service checks, PostgreSQL RLS, scoped queries, worker revalidation, and delivery authorization. Administrative access does not automatically grant transcript-read access. Private object keys do not grant access; baseline audio playback uses an authorized API.
+
+Keep provider credentials out of browser/desktop bundles. Use separate development, staging, and production resources/identities, with synthetic or explicitly approved de-identified data outside production.
 
 ---
 
@@ -235,31 +268,43 @@ Any endpoint receiving an ID must assume that ID may have been guessed.
 
 The quote renderer is a trusted boundary.
 
-Its basic operation is:
+Follow the complete trusted rendering path in architecture §15:
 
 ```text
-passage ID
+principal + validated passage/span reference
  ↓
-authorization
+load sealed/pinned records
  ↓
-load canonical passage
+reauthorize current access
  ↓
-validate offsets
+verify published state and current approval
  ↓
-extract exact substring
+load exact immutable source and verify content hash
  ↓
-return source metadata
+validate bounds and UTF-8 boundaries
+ ↓
+slice exact bytes, verify span hash, and decode strictly
+ ↓
+reauthorize before delivery and write durable render audit
+ ↓
+return VerifiedQuote with provenance
 ```
 
 No LLM call belongs inside the quote renderer.
+
+Never substitute indexed text, model text, a newer version, or normalized search text. Integrity failures suppress the affected quote and raise an integrity event.
 
 ---
 
 # AI Failure Rule
 
-If evidence is insufficient, return an insufficient-evidence state.
+Follow architecture §§16 and 26. If no permitted relevant evidence is found, return a scoped no-evidence state; do not claim the information is absent globally. Keep provider/service failures distinct from lack of evidence.
 
 Do not fill gaps using general model knowledge.
+
+Synthesis consumes successfully rendered evidence only. Every claim must cite delivered source span IDs. Never stream unchecked model text or place generated prose in verified-quote fields/styling. If synthesis fails while evidence is available, return evidence with `analysis_unavailable`. Preserve deterministic search and quote functionality when model services are unavailable.
+
+Jobs and external side effects must be idempotent under architecture §22. Use durable leases, bounded retries, provider-state reconciliation, and transactional outbox events; do not assume exactly-once external execution.
 
 ---
 
@@ -274,28 +319,35 @@ happy path
 invalid input
 unauthorized user
 wrong project
-wrong organization
+wrong tenant/workspace
 missing resource
 duplicate job
 provider failure
 retry behavior
 ```
 
-Quote-related work must include adversarial hallucination tests.
+Follow architecture §§27–28 for the applicable test suites and evaluation targets. Quote-related work must test exact approved-source byte equality, Unicode/emoji/combining marks, subspan boundaries, wrong versions, revoked approval, missing source bytes, and adversarial fabrication. No audio-comparison gate is required.
+
+Test revocation during retrieval/delivery, unauthorized counts/metadata, and idempotent retries. Enforce module dependency boundaries with architecture tests. Activate relevant product evals alongside the protected behavior, following `docs/EVALS.md`.
 
 ---
 
 # Module Completion Gate
 
-Do not declare a task complete until:
+Follow architecture §31. Before declaring completion, verify as applicable:
 
 ```text
 implementation works
 tests pass
 authorization is tested
+cross-tenant/project isolation is tested
 failure behavior is tested
+idempotency is tested
 contracts are documented
 migrations are included
+logs contain no confidential content
+architecture dependency checks pass
+relevant evals and acceptance gates pass
 CI passes
 ARCHITECTURE.md remains accurate
 ```
@@ -322,6 +374,9 @@ DATABASE MIGRATIONS
 TESTS
 - ...
 
+EVALS / ACCEPTANCE GATES
+- ...
+
 VERIFICATION COMMANDS
 - ...
 
@@ -342,19 +397,25 @@ ARCHITECTURAL DECISIONS
 Material architecture changes require an ADR under:
 
 ```text
-docs/ADR/
+docs/decisions/
 ```
 
-Do not silently replace:
+Follow architecture §37 for ADR contents and §4 for locked implementation choices. Do not silently replace:
 
-- PostgreSQL,
-- pgvector,
-- authentication strategy,
-- transcript version model,
-- quote rendering model,
-- storage model,
+- FastAPI/Python API strategy,
+- PostgreSQL/pgvector,
+- Entra identity strategy,
+- transcript approval/version model,
+- deterministic quote renderer,
+- baseline storage provider,
+- Recall capture integration,
+- AssemblyAI transcription integration,
 - project-isolation strategy,
-- external provider abstraction.
+- provider abstraction boundaries,
+- OneDrive one-way export model,
+- PostgreSQL jobs/outbox baseline.
+
+Update the architecture when an approved material decision changes it. Pin provider, model, runtime, and API versions as required by the architecture.
 
 ---
 
@@ -374,4 +435,6 @@ When code, prompts, or product behavior conflict with source integrity, preserve
 
 The north-star rule is:
 
-> Retrieval locates evidence. AI reasons over evidence. Deterministic code renders source truth.
+> Retrieval locates authorized evidence. AI reasons over permitted evidence. Deterministic code renders approved transcript truth.
+
+The approved, published transcript is the quote source of truth. Apply the complete prohibitions in architecture §39; summaries here do not relax them.

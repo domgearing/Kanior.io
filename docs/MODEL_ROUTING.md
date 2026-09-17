@@ -178,9 +178,8 @@ Do not respond to test failures by weakening tests or eval thresholds.
 
 Long-run engineering workload target:
 
-Astra: 5–10%
-Sol: 60–70%
+Astra: 10-20%
+Sol: 70–80%
 Terra: 20–30%
-Luna: 5–10%
 
 These are planning targets, not hard quotas.

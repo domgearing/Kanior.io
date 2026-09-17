@@ -1,0 +1,4 @@
+# Contract-only tooling; integrate into the root lockfile at application bootstrap.
+pydantic==2.12.5
+jsonschema==4.25.1
+openapi-spec-validator==0.7.2

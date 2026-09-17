@@ -7,6 +7,10 @@ section "PR-gate scaffold"
 run "python scripts/validate-pr-gate.py"
 run "git diff --check"
 
+section "Contract schemas and semantic boundaries"
+run "python scripts/validate-contracts.py"
+run "python scripts/generate-contracts.py --check"
+
 if has_python_source_without_project; then
   echo "Python source directories exist but pyproject.toml is missing." >&2
   exit 1

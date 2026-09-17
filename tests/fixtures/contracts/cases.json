@@ -1,0 +1,824 @@
+[
+  {
+    "name": "valid project",
+    "model": "ProjectCreate",
+    "payload": {
+      "name": "Synthetic Project A"
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "empty name",
+    "model": "ProjectCreate",
+    "payload": {
+      "name": ""
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "blank name",
+    "model": "ProjectCreate",
+    "payload": {
+      "name": "   "
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "oversized name",
+    "model": "ProjectCreate",
+    "payload": {
+      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "numeric name",
+    "model": "ProjectCreate",
+    "payload": {
+      "name": 5
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "caller tenant rejected",
+    "model": "ProjectCreate",
+    "payload": {
+      "name": "A",
+      "tenant_id": "10000000-0000-4000-8000-000000000099"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "caller owner rejected",
+    "model": "ProjectCreate",
+    "payload": {
+      "name": "A",
+      "owner_user_id": "10000000-0000-4000-8000-000000000099"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "valid document",
+    "model": "DocumentCreate",
+    "payload": {
+      "title": "Fictional research call",
+      "meeting_date": "2026-09-16T15:00:00Z",
+      "language": "en-US",
+      "consent_acknowledged": true,
+      "consent_policy_version": "synthetic-v1"
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "consent false",
+    "model": "DocumentCreate",
+    "payload": {
+      "title": "Fictional research call",
+      "meeting_date": "2026-09-16T15:00:00Z",
+      "language": "en-US",
+      "consent_acknowledged": false,
+      "consent_policy_version": "synthetic-v1"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "consent integer",
+    "model": "DocumentCreate",
+    "payload": {
+      "title": "Fictional research call",
+      "meeting_date": "2026-09-16T15:00:00Z",
+      "language": "en-US",
+      "consent_acknowledged": 1,
+      "consent_policy_version": "synthetic-v1"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "naive timestamp",
+    "model": "DocumentCreate",
+    "payload": {
+      "title": "Fictional research call",
+      "meeting_date": "2026-09-16T15:00:00",
+      "language": "en-US",
+      "consent_acknowledged": true,
+      "consent_policy_version": "synthetic-v1"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "invalid language",
+    "model": "DocumentCreate",
+    "payload": {
+      "title": "Fictional research call",
+      "meeting_date": "2026-09-16T15:00:00Z",
+      "language": "https://example.invalid",
+      "consent_acknowledged": true,
+      "consent_policy_version": "synthetic-v1"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "caller creator",
+    "model": "DocumentCreate",
+    "payload": {
+      "title": "Fictional research call",
+      "meeting_date": "2026-09-16T15:00:00Z",
+      "language": "en-US",
+      "consent_acknowledged": true,
+      "consent_policy_version": "synthetic-v1",
+      "created_by": "10000000-0000-4000-8000-000000000001"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "membership insert",
+    "model": "MembershipPut",
+    "payload": {
+      "role": "reader",
+      "enabled": true,
+      "expected_revision": 0
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "membership update",
+    "model": "MembershipPut",
+    "payload": {
+      "role": "contributor",
+      "enabled": true,
+      "expected_revision": 3
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "admin not project role",
+    "model": "MembershipPut",
+    "payload": {
+      "role": "tenant_admin",
+      "enabled": true,
+      "expected_revision": 0
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "negative revision",
+    "model": "MembershipPut",
+    "payload": {
+      "role": "reader",
+      "enabled": true,
+      "expected_revision": -1
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "boolean revision",
+    "model": "MembershipPut",
+    "payload": {
+      "role": "reader",
+      "enabled": true,
+      "expected_revision": true
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "untimed import",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "No, fifteen. ?? é ??",
+          "speaker_label": null,
+          "start_ms": null,
+          "end_ms": null
+        }
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "omitted import metadata",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "Preserve  spaces.\t"
+        }
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "timed import",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "A",
+          "start_ms": 0,
+          "end_ms": 100
+        }
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "unknown import version",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 2,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "No, fifteen. ?? é ??",
+          "speaker_label": null,
+          "start_ms": null,
+          "end_ms": null
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "boolean import version",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": true,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "No, fifteen. ?? é ??",
+          "speaker_label": null,
+          "start_ms": null,
+          "end_ms": null
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "empty segments",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": []
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "empty segment text",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": ""
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "only start",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "A",
+          "start_ms": 0
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "only null start",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "A",
+          "start_ms": null
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "mixed null times",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "A",
+          "start_ms": 0,
+          "end_ms": null
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "negative times",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "A",
+          "start_ms": -1,
+          "end_ms": 1
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "reversed times semantic failure",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "A",
+          "start_ms": 100,
+          "end_ms": 1
+        }
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": false
+  },
+  {
+    "name": "injected remote asset",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "No, fifteen. ?? é ??",
+          "speaker_label": null,
+          "start_ms": null,
+          "end_ms": null
+        }
+      ],
+      "audio_url": "https://example.invalid/audio"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "injected byte offsets",
+    "model": "TranscriptImport",
+    "payload": {
+      "schema_version": 1,
+      "language": "en-US",
+      "segments": [
+        {
+          "text": "A",
+          "start_byte": 0,
+          "end_byte": 1
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "valid selection",
+    "model": "EvidenceSelection",
+    "payload": {
+      "selected_passages": [
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000002"
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "empty selection",
+    "model": "EvidenceSelection",
+    "payload": {
+      "selected_passages": []
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "duplicate selection",
+    "model": "EvidenceSelection",
+    "payload": {
+      "selected_passages": [
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "too many selection",
+    "model": "EvidenceSelection",
+    "payload": {
+      "selected_passages": [
+        "10000000-0000-4000-8000-000000000000",
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000002",
+        "10000000-0000-4000-8000-000000000003",
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000005",
+        "10000000-0000-4000-8000-000000000006",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "non UUID selection",
+    "model": "EvidenceSelection",
+    "payload": {
+      "selected_passages": [
+        "P184"
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "quote injection",
+    "model": "EvidenceSelection",
+    "payload": {
+      "selected_passages": [
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000002"
+      ],
+      "quote_text": "Invented"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "valid span selection",
+    "model": "EvidenceSpanSelection",
+    "payload": {
+      "selected_spans": [
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": 0,
+          "end_character": 5
+        }
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "negative span",
+    "model": "EvidenceSpanSelection",
+    "payload": {
+      "selected_spans": [
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": -1,
+          "end_character": 5
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "boolean span",
+    "model": "EvidenceSpanSelection",
+    "payload": {
+      "selected_spans": [
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": true,
+          "end_character": 5
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "reversed span semantic failure",
+    "model": "EvidenceSpanSelection",
+    "payload": {
+      "selected_spans": [
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": 10,
+          "end_character": 5
+        }
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": false
+  },
+  {
+    "name": "empty span semantic failure",
+    "model": "EvidenceSpanSelection",
+    "payload": {
+      "selected_spans": [
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": 5,
+          "end_character": 5
+        }
+      ]
+    },
+    "schema_valid": true,
+    "model_valid": false
+  },
+  {
+    "name": "duplicate spans",
+    "model": "EvidenceSpanSelection",
+    "payload": {
+      "selected_spans": [
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": 0,
+          "end_character": 5
+        },
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": 0,
+          "end_character": 5
+        }
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "mixed selector modes",
+    "model": "EvidenceSpanSelection",
+    "payload": {
+      "selected_spans": [
+        {
+          "passage_id": "10000000-0000-4000-8000-000000000001",
+          "start_character": 0,
+          "end_character": 5
+        }
+      ],
+      "selected_passages": [
+        "10000000-0000-4000-8000-000000000001"
+      ]
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "valid membership event",
+    "model": "AccessChangedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "access.changed",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "workspace_id": "10000000-0000-4000-8000-000000000002",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000003",
+      "occurred_at": "2026-09-16T15:00:00Z",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "project_membership_id": "10000000-0000-4000-8000-000000000004",
+        "user_id": "10000000-0000-4000-8000-000000000005",
+        "membership_revision": 2,
+        "authorization_epoch": 1
+      }
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "wrong event aggregate semantic failure",
+    "model": "AccessChangedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "access.changed",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "workspace_id": "10000000-0000-4000-8000-000000000002",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000099",
+      "occurred_at": "2026-09-16T15:00:00Z",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "project_membership_id": "10000000-0000-4000-8000-000000000004",
+        "user_id": "10000000-0000-4000-8000-000000000005",
+        "membership_revision": 2,
+        "authorization_epoch": 1
+      }
+    },
+    "schema_valid": true,
+    "model_valid": false
+  },
+  {
+    "name": "non UTC event semantic failure",
+    "model": "AccessChangedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "access.changed",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "workspace_id": "10000000-0000-4000-8000-000000000002",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000003",
+      "occurred_at": "2026-09-16T15:00:00+01:00",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "project_membership_id": "10000000-0000-4000-8000-000000000004",
+        "user_id": "10000000-0000-4000-8000-000000000005",
+        "membership_revision": 2,
+        "authorization_epoch": 1
+      }
+    },
+    "schema_valid": true,
+    "model_valid": false
+  },
+  {
+    "name": "event missing workspace",
+    "model": "AccessChangedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "access.changed",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000003",
+      "occurred_at": "2026-09-16T15:00:00Z",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "project_membership_id": "10000000-0000-4000-8000-000000000004",
+        "user_id": "10000000-0000-4000-8000-000000000005",
+        "membership_revision": 2,
+        "authorization_epoch": 1
+      }
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "event extra body",
+    "model": "AccessChangedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "access.changed",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "workspace_id": "10000000-0000-4000-8000-000000000002",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000003",
+      "occurred_at": "2026-09-16T15:00:00Z",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "project_membership_id": "10000000-0000-4000-8000-000000000004",
+        "user_id": "10000000-0000-4000-8000-000000000005",
+        "membership_revision": 2,
+        "authorization_epoch": 1,
+        "transcript": "Synthetic secret"
+      }
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "valid publication event",
+    "model": "TranscriptPublishedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "transcript.published",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "workspace_id": "10000000-0000-4000-8000-000000000002",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000006",
+      "occurred_at": "2026-09-16T15:00:00Z",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "transcript_version_id": "10000000-0000-4000-8000-000000000007"
+      },
+      "document_id": "10000000-0000-4000-8000-000000000006"
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "publication missing document",
+    "model": "TranscriptPublishedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "transcript.published",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "workspace_id": "10000000-0000-4000-8000-000000000002",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000006",
+      "occurred_at": "2026-09-16T15:00:00Z",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "transcript_version_id": "10000000-0000-4000-8000-000000000007"
+      }
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "publication extra bytes",
+    "model": "TranscriptPublishedEvent",
+    "payload": {
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "schema_version": 1,
+      "type": "transcript.published",
+      "tenant_id": "10000000-0000-4000-8000-000000000001",
+      "workspace_id": "10000000-0000-4000-8000-000000000002",
+      "project_id": "10000000-0000-4000-8000-000000000003",
+      "aggregate_id": "10000000-0000-4000-8000-000000000006",
+      "occurred_at": "2026-09-16T15:00:00Z",
+      "trace_id": "10000000-0000-4000-8000-000000000009",
+      "data": {
+        "transcript_version_id": "10000000-0000-4000-8000-000000000007",
+        "text": "No"
+      },
+      "document_id": "10000000-0000-4000-8000-000000000006"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  },
+  {
+    "name": "safe error",
+    "model": "Error",
+    "payload": {
+      "code": "not_found",
+      "message": "Resource unavailable",
+      "request_id": "10000000-0000-4000-8000-000000000009",
+      "retryable": false
+    },
+    "schema_valid": true,
+    "model_valid": true
+  },
+  {
+    "name": "unsafe raw error",
+    "model": "Error",
+    "payload": {
+      "code": "not_found",
+      "message": "Resource unavailable",
+      "request_id": "10000000-0000-4000-8000-000000000009",
+      "retryable": false,
+      "raw_provider_response": "secret"
+    },
+    "schema_valid": false,
+    "model_valid": false
+  }
+]

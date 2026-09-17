@@ -3,6 +3,10 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
 cd "$ROOT_DIR"
 
+section "Install contract tooling"
+python -m pip install --disable-pip-version-check -r tools/contracts/requirements.lock
+npm ci --prefix tools/contracts --ignore-scripts
+
 if has_python_project; then
   section "Install Python tooling"
   python -m pip install --disable-pip-version-check --quiet uv

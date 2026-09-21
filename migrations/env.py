@@ -8,6 +8,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from migrations.database_url import normalize_database_url
+
 config = context.config
 
 # Migrations deliberately use a separate identity from API and worker runtime.
@@ -18,7 +20,7 @@ if migrator_url := (
     or os.environ.get("KANIOR_DATABASE_URL")
     or os.environ.get("DATABASE_URL")
 ):
-    config.set_main_option("sqlalchemy.url", migrator_url)
+    config.set_main_option("sqlalchemy.url", normalize_database_url(migrator_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

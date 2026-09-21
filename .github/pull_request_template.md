@@ -44,6 +44,22 @@ RESULT: PASS
 
 ```
 
+## Agent execution
+
+Primary model:
+Escalated: Yes / No
+Escalation model:
+Reason for escalation:
+
+Failed attempts before escalation:
+
+## Verification
+
+- [ ] Model routing followed `docs/MODEL_ROUTING.md`
+- [ ] No unnecessary high-tier model escalation
+- [ ] Required tests/evals pass
+- [ ] `./scripts/pr-ready.sh` passes
+
 ## Security / data-isolation impact
 
 <!-- State "none" if genuinely none. Call out authorization, RLS, tenant/project scoping, object storage, external providers, and logging changes. -->

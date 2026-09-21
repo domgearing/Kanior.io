@@ -18,7 +18,8 @@ from pydantic import (
 Name = Annotated[str, StringConstraints(min_length=1, max_length=200, pattern=r"\S")]
 Title = Annotated[str, StringConstraints(min_length=1, max_length=300, pattern=r"\S")]
 Language = Annotated[
-    str, StringConstraints(min_length=2, max_length=35, pattern=r"^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$")
+    str,
+    StringConstraints(min_length=2, max_length=35, pattern=r"^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"),
 ]
 PolicyVersion = Annotated[str, StringConstraints(min_length=1, max_length=100, pattern=r"\S")]
 NonNegative = Annotated[StrictInt, Field(ge=0)]
@@ -45,9 +46,15 @@ class AuthContext(Contract):
 
 class Error(Contract):
     code: Literal[
-        "unauthenticated", "forbidden", "not_found", "conflict",
-        "payload_too_large", "invalid_input", "rate_limited",
-        "dependency_unavailable", "internal_error",
+        "unauthenticated",
+        "forbidden",
+        "not_found",
+        "conflict",
+        "payload_too_large",
+        "invalid_input",
+        "rate_limited",
+        "dependency_unavailable",
+        "internal_error",
     ]
     message: Annotated[str, StringConstraints(min_length=1, max_length=300)]
     request_id: RequestId
@@ -144,17 +151,24 @@ class DocumentPage(Contract):
 
 class TranscriptSegment(Contract):
     model_config = ConfigDict(
-        extra="forbid", strict=True,
+        extra="forbid",
+        strict=True,
         json_schema_extra={
             "anyOf": [
                 {"not": {"anyOf": [{"required": ["start_ms"]}, {"required": ["end_ms"]}]}},
-                {"required": ["start_ms", "end_ms"], "properties": {"start_ms": {"type": "null"}, "end_ms": {"type": "null"}}},
+                {
+                    "required": ["start_ms", "end_ms"],
+                    "properties": {"start_ms": {"type": "null"}, "end_ms": {"type": "null"}},
+                },
                 {
                     "required": ["start_ms", "end_ms"],
                     "properties": {"start_ms": {"type": "integer"}, "end_ms": {"type": "integer"}},
                 },
             ],
-            "description": "Times are paired; semantic validation also requires end_ms >= start_ms. Preserve text verbatim.",
+            "description": (
+                "Times are paired; semantic validation also requires end_ms >= start_ms. "
+                "Preserve text verbatim."
+            ),
         },
     )
     text: Annotated[str, StringConstraints(min_length=1)]
@@ -168,7 +182,7 @@ class TranscriptSegment(Contract):
             raise ValueError("time fields must be supplied together")
         if (self.start_ms is None) != (self.end_ms is None):
             raise ValueError("times must be paired")
-        if self.start_ms is not None and self.end_ms < self.start_ms:
+        if self.start_ms is not None and self.end_ms is not None and self.end_ms < self.start_ms:
             raise ValueError("end_ms precedes start_ms")
         return self
 
@@ -187,7 +201,9 @@ class TranscriptImport(Contract):
 
 
 class EvidenceSelection(Contract):
-    selected_passages: Annotated[list[UUID], Field(max_length=8, json_schema_extra={"uniqueItems": True})]
+    selected_passages: Annotated[
+        list[UUID], Field(max_length=8, json_schema_extra={"uniqueItems": True})
+    ]
 
     @model_validator(mode="after")
     def unique_ids(self) -> "EvidenceSelection":
@@ -209,7 +225,9 @@ class SelectedSpan(Contract):
 
 
 class EvidenceSpanSelection(Contract):
-    selected_spans: Annotated[list[SelectedSpan], Field(max_length=8, json_schema_extra={"uniqueItems": True})]
+    selected_spans: Annotated[
+        list[SelectedSpan], Field(max_length=8, json_schema_extra={"uniqueItems": True})
+    ]
 
     @model_validator(mode="after")
     def unique_spans(self) -> "EvidenceSpanSelection":
@@ -279,10 +297,21 @@ class TranscriptPublishedEvent(EventBase):
 
 
 PUBLIC_MODELS = [
-    Error, MeResponse, ProjectCreate, Project, MembershipPut, Membership,
-    DocumentCreate, Document, ProjectPage, DocumentPage,
+    Error,
+    MeResponse,
+    ProjectCreate,
+    Project,
+    MembershipPut,
+    Membership,
+    DocumentCreate,
+    Document,
+    ProjectPage,
+    DocumentPage,
 ]
 RESERVED_MODELS = [
-    TranscriptImport, EvidenceSelection, EvidenceSpanSelection,
-    AccessChangedEvent, TranscriptPublishedEvent,
+    TranscriptImport,
+    EvidenceSelection,
+    EvidenceSpanSelection,
+    AccessChangedEvent,
+    TranscriptPublishedEvent,
 ]

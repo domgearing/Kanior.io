@@ -1,0 +1,31 @@
+name: kanior-local
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_USER: ${KANIOR_POSTGRES_USER:-kanior_admin}
+      POSTGRES_PASSWORD: ${KANIOR_POSTGRES_PASSWORD:-kanior_admin}
+      POSTGRES_DB: ${KANIOR_POSTGRES_DB:-kanior}
+      KANIOR_MIGRATOR_DB_PASSWORD: ${KANIOR_MIGRATOR_DB_PASSWORD:-kanior_migrator}
+      KANIOR_API_DB_PASSWORD: ${KANIOR_API_DB_PASSWORD:-kanior_api}
+      KANIOR_WORKER_DB_PASSWORD: ${KANIOR_WORKER_DB_PASSWORD:-kanior_worker}
+    ports:
+      - "127.0.0.1:${KANIOR_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

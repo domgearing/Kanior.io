@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.development.local)",
+      "Read(./.env.test.local)",
+      "Read(./.env.production.local)",
+      "Read(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./**/id_rsa)",
+      "Read(./**/id_ed25519)",
+      "Edit(./.env)",
+      "Edit(./secrets/**)",
+      "Write(./.env)",
+      "Write(./secrets/**)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(git clean -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git checkout -- *)",
+      "Bash(git restore --worktree *)",
+      "Bash(git push --force*)",
+      "Bash(git push *--force*)",
+      "Bash(docker system prune*)",
+      "Bash(docker volume prune*)"
+    ]
+  }
+}

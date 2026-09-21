@@ -3,8 +3,4 @@
 
 import json
 
-print(json.dumps({
-    "metric": "pass_rate",
-    "value": 1.0,
-    "details": "Eval harness is operational."
-}))
+print(json.dumps({"metric": "pass_rate", "value": 1.0, "details": "Eval harness is operational."}))

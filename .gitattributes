@@ -1,0 +1,4 @@
+* text=auto
+
+# Repository automation is executed by Git Bash on Windows and Bash in CI.
+*.sh text eol=lf

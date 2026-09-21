@@ -1,6 +1,6 @@
-<!-- gitnexus:start -->
 @AGENTS.md
 
+<!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **Kanior.io** (56170 symbols, 176209 relationships, 689 execution flows).

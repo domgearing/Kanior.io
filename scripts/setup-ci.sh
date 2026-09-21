@@ -15,6 +15,5 @@ fi
 
 if has_node_project; then
   section "Install Node dependencies"
-  corepack enable
   run "$NODE_INSTALL_CMD"
 fi

@@ -1,0 +1,4 @@
+2026-01-15T13:30:00Z Casey Lin: The pilot begins on Tuesday, but this project has no launch approval yet.
+2026-01-15T13:30:05Z Dana Vale: The target is 2.5 days, not 25 days; please preserve the decimal point.
+2026-01-15T13:30:11Z Casey Lin: The phrase "needs review" appears twice: needs review, needs review.
+2026-01-15T13:30:17Z Dana Vale: What is the office pet policy? There is insufficient evidence in this transcript.

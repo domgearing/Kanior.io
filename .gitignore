@@ -1,3 +1,69 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.local.pem
+*.local.key
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node / Electron
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+desktop/out/
+desktop/release/
+*.tsbuildinfo
+
+# Local databases, media, and service state
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+infra/local/data/
+infra/local/postgres-data/
+local-data/
+media/
+recordings/
+uploads/
+
+# Logs and temporary files
+*.log
+tmp/
+.tmp/
+*.tmp
+*.swp
+*~
+
+# Editors and operating systems
+.idea/
+.vscode/
+gitnexus/
+.gitnexus/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
 # PR/eval run artifacts
 .artifacts/
 evals/results/

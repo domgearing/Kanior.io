@@ -1,0 +1,23 @@
+{
+  "name": "kanior-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KaniorAI transcript intelligence platform workspace",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=12.4.2"
+  },
+  "scripts": {
+    "dev:web": "corepack pnpm --filter @kanior/web dev",
+    "dev:desktop": "corepack pnpm --filter @kanior/desktop dev",
+    "format:check": "prettier --check --ignore-unknown package.json pnpm-workspace.yaml web desktop",
+    "lint": "corepack pnpm --filter @kanior/web lint && corepack pnpm --filter @kanior/desktop lint",
+    "typecheck": "corepack pnpm --filter @kanior/web typecheck && corepack pnpm --filter @kanior/desktop typecheck",
+    "test": "corepack pnpm --filter @kanior/web test && corepack pnpm --filter @kanior/desktop test",
+    "build": "corepack pnpm --filter @kanior/web build && corepack pnpm --filter @kanior/desktop build"
+  },
+  "devDependencies": {
+    "prettier": "3.7.4"
+  }
+}

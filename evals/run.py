@@ -108,9 +108,7 @@ def main() -> int:
             op = cfg["comparison"]
 
             if metric != expected_metric:
-                raise ValueError(
-                    f"metric mismatch: expected {expected_metric!r}, got {metric!r}"
-                )
+                raise ValueError(f"metric mismatch: expected {expected_metric!r}, got {metric!r}")
 
             passed = compare(value, op, threshold)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -119,10 +117,7 @@ def main() -> int:
             continue
 
         status = "PASS" if passed else "FAIL"
-        print(
-            f"{name:<32} {status:<6} {metric}={value:g} "
-            f"required {op} {threshold:g}"
-        )
+        print(f"{name:<32} {status:<6} {metric}={value:g} required {op} {threshold:g}")
         if not passed and bool(cfg.get("blocking", True)):
             failures += 1
 

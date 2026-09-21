@@ -25,6 +25,7 @@ Push the branch to GitHub and open a PR to `main`. The workflow `.github/workflo
 Checks
 Integration + Migrations
 PR Evals
+Security
 PR Gate / required
 ```
 

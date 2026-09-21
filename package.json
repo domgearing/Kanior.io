@@ -18,6 +18,6 @@
     "build": "corepack pnpm --filter @kanior/web build && corepack pnpm --filter @kanior/desktop build"
   },
   "devDependencies": {
-    "prettier": "3.7.4"
+    "prettier": "3.9.8"
   }
 }

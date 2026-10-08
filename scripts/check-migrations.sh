@@ -16,6 +16,8 @@ fi
 if [[ -n "${PR_GATE_DATABASE_URL:-}" ]]; then
   section "Migration validation"
   export DATABASE_URL="$PR_GATE_DATABASE_URL"
+  export VERELO_MIGRATOR_DATABASE_URL="$PR_GATE_DATABASE_URL"
+  run "python -m uv run python scripts/prepare-pr-gate-db.py"
   run "python -m uv run alembic upgrade head"
   exit 0
 fi
@@ -47,4 +49,7 @@ done
 docker exec "$name" pg_isready -U postgres -d verelo_pr_gate >/dev/null
 port="$(docker port "$name" 5432/tcp | awk -F: '{print $NF}')"
 export DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:${port}/verelo_pr_gate"
+export PR_GATE_DATABASE_URL="$DATABASE_URL"
+export VERELO_MIGRATOR_DATABASE_URL="$DATABASE_URL"
+run "python -m uv run python scripts/prepare-pr-gate-db.py"
 run "python -m uv run alembic upgrade head"

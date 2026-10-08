@@ -37,8 +37,7 @@ class _S3:
         del kwargs
         return {
             "Parts": [
-                {"PartNumber": number, "ETag": f"etag-{number}"}
-                for number in sorted(self.parts)
+                {"PartNumber": number, "ETag": f"etag-{number}"} for number in sorted(self.parts)
             ]
         }
 
@@ -226,4 +225,3 @@ def test_b2_multipart_resumes_and_reads_pinned_version(tmp_path, monkeypatch) ->
     stored = resumed.put_immutable(data, digest, "operation")
     assert resumed.read_version(stored.object_ref) == data
     assert resumed.read_version(stored.object_ref, (1, 3)) == b"xx"
-

@@ -3,8 +3,10 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("vereloDesktop", {
   platform: process.platform,
   auth: {
-    onExpired: (callback: () => void) => ipcRenderer.on("auth:expired", callback),
-    onSignedIn: (callback: () => void) => ipcRenderer.on("auth:signed-in", callback),
+    onExpired: (callback: () => void) =>
+      ipcRenderer.on("auth:expired", callback),
+    onSignedIn: (callback: () => void) =>
+      ipcRenderer.on("auth:signed-in", callback),
     mode: () => ipcRenderer.invoke("auth:mode"),
     status: () => ipcRenderer.invoke("auth:status"),
     open: () => ipcRenderer.invoke("auth:open"),
@@ -13,13 +15,17 @@ contextBridge.exposeInMainWorld("vereloDesktop", {
   },
   meetings: {
     projects: () => ipcRenderer.invoke("meetings:projects"),
-    createProject: (name: string) => ipcRenderer.invoke("meetings:create-project", name),
+    createProject: (name: string) =>
+      ipcRenderer.invoke("meetings:create-project", name),
     clear: () => ipcRenderer.invoke("meetings:clear"),
     list: (projectId: string) => ipcRenderer.invoke("meetings:list", projectId),
-    create: (projectId: string, title: string) => ipcRenderer.invoke("meetings:create", projectId, title),
-    select: (documentId: string) => ipcRenderer.invoke("meetings:select", documentId),
+    create: (projectId: string, title: string) =>
+      ipcRenderer.invoke("meetings:create", projectId, title),
+    select: (documentId: string) =>
+      ipcRenderer.invoke("meetings:select", documentId),
     history: () => ipcRenderer.invoke("meetings:history"),
-    retry: (ingestionId: string) => ipcRenderer.invoke("meetings:retry", ingestionId),
+    retry: (ingestionId: string) =>
+      ipcRenderer.invoke("meetings:retry", ingestionId),
   },
   capture: {
     mode: () => ipcRenderer.invoke("capture:mode"),

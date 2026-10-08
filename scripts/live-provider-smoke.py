@@ -117,6 +117,7 @@ def run_b2(settings: Settings) -> tuple[BackblazeB2Storage, str]:
     multipart = bytes(range(256)) * (9 * 1024 * 1024 // 256 + 1)
     multipart = multipart[: 9 * 1024 * 1024]
     digest = sha256(multipart).hexdigest()
+
     def interrupt_after_first_part(part_number: int) -> None:
         if part_number == 1:
             raise RuntimeError("intentional_multipart_interruption")

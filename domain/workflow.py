@@ -878,8 +878,7 @@ class IngestionWorkflowService:
             media = "text/plain; charset=utf-8"
         elif format_name == "md":
             organized = (
-                format_segmented_transcript(segments, markdown=True)
-                or publication.canonical_text
+                format_segmented_transcript(segments, markdown=True) or publication.canonical_text
             )
             data = f"# {version['title']}\n\n{organized}\n".encode()
             media = "text/markdown; charset=utf-8"

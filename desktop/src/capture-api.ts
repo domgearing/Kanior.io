@@ -41,7 +41,9 @@ export class CaptureApiClient {
     return this.send(`/api/v1/capture-sessions/${captureSessionId}`, "GET");
   }
 
-  async transcriptionProgress(ingestionId: string): Promise<TranscriptionProgress> {
+  async transcriptionProgress(
+    ingestionId: string,
+  ): Promise<TranscriptionProgress> {
     const value = await this.raw(`/api/v1/ingestions/${ingestionId}`, "GET");
     return {
       state: value.state as string,

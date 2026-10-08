@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { lifecyclePosition, lifecycleSteps, safeProcessingMessage } from "./ingestion-lifecycle";
+import {
+  lifecyclePosition,
+  lifecycleSteps,
+  safeProcessingMessage,
+} from "./ingestion-lifecycle";
 
 describe("ingestion lifecycle", () => {
   it("orders processing through review and publication without inventing percentage progress", () => {
@@ -14,7 +18,9 @@ describe("ingestion lifecycle", () => {
   });
 
   it("gives a safe action and retains the diagnostic code", () => {
-    expect(safeProcessingMessage("transcription_timeout")).toContain("transcription timeout");
+    expect(safeProcessingMessage("transcription_timeout")).toContain(
+      "transcription timeout",
+    );
     expect(safeProcessingMessage(null)).toBeNull();
   });
 });

@@ -296,9 +296,7 @@ def transcript_speaker(label: str | None) -> str | None:
     return value
 
 
-def format_segmented_transcript(
-    segments: tuple[Segment, ...], *, markdown: bool = False
-) -> str:
+def format_segmented_transcript(segments: tuple[Segment, ...], *, markdown: bool = False) -> str:
     """Format immutable diarization metadata as readable transcript turns."""
 
     if not segments:

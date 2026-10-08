@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { lifecyclePosition, lifecycleSteps, safeProcessingMessage } from "./ingestion-lifecycle";
+import {
+  lifecyclePosition,
+  lifecycleSteps,
+  safeProcessingMessage,
+} from "./ingestion-lifecycle";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
@@ -84,7 +88,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: "include",
     ...init,
   });
-  if (!response.ok) throw new Error(`Verelo API returned HTTP ${response.status}. Please check your connection or ask an administrator if it persists.`);
+  if (!response.ok)
+    throw new Error(
+      `Verelo API returned HTTP ${response.status}. Please check your connection or ask an administrator if it persists.`,
+    );
   return (await response.json()) as T;
 }
 
@@ -589,21 +596,30 @@ function IngestionWorkspace({
     const timer = window.setInterval(() => {
       void request<{ items: Ingestion[] }>(
         `/api/v1/documents/${document.document_id}/ingestions`,
-      ).then(async (page) => {
-        setIngestions(page.items);
-        const current = page.items.find(
-          (item) => item.ingestion_id === selected?.ingestion_id,
-        );
-        if (!current) return;
-        setSelected(current);
-        if (current.draft_sha256 && current.draft_sha256 !== draft?.content_sha256) {
-          const value = await request<Draft>(
-            `/api/v1/ingestions/${current.ingestion_id}/draft`,
+      )
+        .then(async (page) => {
+          setIngestions(page.items);
+          const current = page.items.find(
+            (item) => item.ingestion_id === selected?.ingestion_id,
           );
-          setDraft(value);
-          setCorrection(value.canonical_text);
-        }
-      }).catch(() => setStatus("Could not refresh processing status. Check the API connection."));
+          if (!current) return;
+          setSelected(current);
+          if (
+            current.draft_sha256 &&
+            current.draft_sha256 !== draft?.content_sha256
+          ) {
+            const value = await request<Draft>(
+              `/api/v1/ingestions/${current.ingestion_id}/draft`,
+            );
+            setDraft(value);
+            setCorrection(value.canonical_text);
+          }
+        })
+        .catch(() =>
+          setStatus(
+            "Could not refresh processing status. Check the API connection.",
+          ),
+        );
     }, 5000);
     return () => window.clearInterval(timer);
   }, [document.document_id, selected?.ingestion_id, draft?.content_sha256]);
@@ -740,7 +756,13 @@ function IngestionWorkspace({
     if (!selected?.can_retry) return;
     const updated = await request<Ingestion>(
       `/api/v1/ingestions/${selected.ingestion_id}/retry`,
-      { method: "POST", headers, body: JSON.stringify({ operation_key: `web-retry-${crypto.randomUUID()}` }) },
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          operation_key: `web-retry-${crypto.randomUUID()}`,
+        }),
+      },
     );
     setSelected(updated);
     setStatus("Retry requested. Processing status will update automatically.");
@@ -821,8 +843,18 @@ function IngestionWorkspace({
         <button onClick={close}>Close</button>
       </header>
       {role !== "reader" && (
-        <form className="source-upload" onSubmit={(event) => void upload(event).catch((error: unknown) =>
-          setStatus(error instanceof Error ? error.message : "Upload failed. Please try again."))}>
+        <form
+          className="source-upload"
+          onSubmit={(event) =>
+            void upload(event).catch((error: unknown) =>
+              setStatus(
+                error instanceof Error
+                  ? error.message
+                  : "Upload failed. Please try again.",
+              ),
+            )
+          }
+        >
           <input
             name="source"
             type="file"
@@ -855,34 +887,71 @@ function IngestionWorkspace({
               <strong>{selected.state.replaceAll("_", " ")}</strong>
               <span>Stage: {selected.stage.replaceAll("_", " ")}</span>
               {selected.state === "source_pending" && (
-                <span>{Math.floor(100 * selected.uploaded_bytes / selected.expected_bytes)}% uploaded</span>
+                <span>
+                  {Math.floor(
+                    (100 * selected.uploaded_bytes) / selected.expected_bytes,
+                  )}
+                  % uploaded
+                </span>
               )}
-              {selected.safe_error_code && <span>{safeProcessingMessage(selected.safe_error_code)}</span>}
-              <ol className="lifecycle-steps" aria-label="Recording and transcript progress">
+              {selected.safe_error_code && (
+                <span>{safeProcessingMessage(selected.safe_error_code)}</span>
+              )}
+              <ol
+                className="lifecycle-steps"
+                aria-label="Recording and transcript progress"
+              >
                 {lifecycleSteps.map((step, index) => (
-                  <li key={step.id} className={
-                    selected.state === "aborted" ? "pending"
-                      : index < lifecyclePosition(selected.state, selected.stage) ? "complete"
-                        : index === lifecyclePosition(selected.state, selected.stage) ? "current" : "pending"
-                  }>{selected.source_kind === "transcript" && step.id === "upload"
-                    ? "Uploading transcript"
-                    : selected.source_kind === "transcript" && step.id === "storage"
-                      ? "Storing transcript in Verelo"
-                      : step.label}</li>
+                  <li
+                    key={step.id}
+                    className={
+                      selected.state === "aborted"
+                        ? "pending"
+                        : index <
+                            lifecyclePosition(selected.state, selected.stage)
+                          ? "complete"
+                          : index ===
+                              lifecyclePosition(selected.state, selected.stage)
+                            ? "current"
+                            : "pending"
+                    }
+                  >
+                    {selected.source_kind === "transcript" &&
+                    step.id === "upload"
+                      ? "Uploading transcript"
+                      : selected.source_kind === "transcript" &&
+                          step.id === "storage"
+                        ? "Storing transcript in Verelo"
+                        : step.label}
+                  </li>
                 ))}
               </ol>
               {selected.can_retry && role !== "reader" && (
-                <button className="button" onClick={() => void retry().catch((error: unknown) =>
-                  setStatus(error instanceof Error ? error.message : "Retry failed."))}>Retry processing</button>
+                <button
+                  className="button"
+                  onClick={() =>
+                    void retry().catch((error: unknown) =>
+                      setStatus(
+                        error instanceof Error
+                          ? error.message
+                          : "Retry failed.",
+                      ),
+                    )
+                  }
+                >
+                  Retry processing
+                </button>
               )}
             </div>
           )}
           {!draft ? (
-            <p>{selected?.safe_error_code
-              ? "Processing stopped. Review the issue above and retry if available."
-              : selected
-                ? "Transcript processing is underway. This view refreshes automatically."
-                : "Select a source to review its transcript."}</p>
+            <p>
+              {selected?.safe_error_code
+                ? "Processing stopped. Review the issue above and retry if available."
+                : selected
+                  ? "Transcript processing is underway. This view refreshes automatically."
+                  : "Select a source to review its transcript."}
+            </p>
           ) : (
             <>
               <div className="draft-meta">
@@ -896,7 +965,10 @@ function IngestionWorkspace({
               {draft.segments.some(
                 (segment) => segment.speaker_label || segment.start_ms !== null,
               ) && (
-                <div className="organized-transcript" aria-label="Speaker-organized transcript">
+                <div
+                  className="organized-transcript"
+                  aria-label="Speaker-organized transcript"
+                >
                   {draft.segments.map((segment, index) => (
                     <section key={`${segment.start_ms ?? "untimed"}-${index}`}>
                       <div className="speaker-line">
@@ -918,7 +990,8 @@ function IngestionWorkspace({
                   aria-label="Transcript correction editor"
                 />
               ) : !draft.segments.some(
-                  (segment) => segment.speaker_label || segment.start_ms !== null,
+                  (segment) =>
+                    segment.speaker_label || segment.start_ms !== null,
                 ) ? (
                 <pre>{draft.canonical_text}</pre>
               ) : null}

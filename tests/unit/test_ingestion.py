@@ -20,8 +20,7 @@ def test_formats_diarized_segments_for_text_and_markdown() -> None:
         Segment("Thanks for having me.", "speaker-2", 65_000, 67_000),
     )
     assert format_segmented_transcript(segments) == (
-        "[00:00] Speaker 1: Welcome everyone.\n\n"
-        "[01:05] Speaker 2: Thanks for having me."
+        "[00:00] Speaker 1: Welcome everyone.\n\n[01:05] Speaker 2: Thanks for having me."
     )
     assert format_segmented_transcript(segments, markdown=True) == (
         "**Speaker 1 · 00:00**\n\nWelcome everyone.\n\n"

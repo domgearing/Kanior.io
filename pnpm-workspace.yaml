@@ -3,7 +3,7 @@ packages:
   - desktop
 
 allowBuilds:
-  '@recallai/desktop-sdk': true
+  "@recallai/desktop-sdk": true
   electron: true
   esbuild: false
 
@@ -13,4 +13,4 @@ auditConfig:
     - GHSA-7pqw-9j4j-h8q3
 
 minimumReleaseAgeExclude:
-  - '@recallai/desktop-sdk@2.0.36'
+  - "@recallai/desktop-sdk@2.0.36"

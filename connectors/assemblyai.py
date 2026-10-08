@@ -221,4 +221,3 @@ class AssemblyAIAdapter:
         if not isinstance(result, str) or not result:
             raise FakeProviderError("provider_invalid_response")
         return result
-

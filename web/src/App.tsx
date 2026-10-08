@@ -151,11 +151,15 @@ function AuthenticatedApp() {
     const finish = async () => {
       const modeResponse = await fetch(`${apiBase}/api/v1/auth/mode`);
       if (!modeResponse.ok) throw new Error("auth_mode_unavailable");
-      const mode = (await modeResponse.json()) as { provider: "magic_link" | "entra" };
+      const mode = (await modeResponse.json()) as {
+        provider: "magic_link" | "entra";
+      };
       setAuthMode(mode.provider);
       if (window.location.search.includes("sign_in_error=1")) {
         window.history.replaceState(null, "", window.location.pathname);
-        setMessage("Microsoft sign-in was not accepted. Check that your employee account is assigned to Verelo.");
+        setMessage(
+          "Microsoft sign-in was not accepted. Check that your employee account is assigned to Verelo.",
+        );
       }
       if (token) {
         const response = await fetch(
@@ -225,35 +229,48 @@ function AuthenticatedApp() {
         {authMode === "entra" ? (
           <>
             <p>Sign in with your assigned company Microsoft account.</p>
-            <button className="button primary" onClick={() =>
-              window.location.assign(`${apiBase}/api/v1/auth/entra/start`)}>
+            <button
+              className="button primary"
+              onClick={() =>
+                window.location.assign(`${apiBase}/api/v1/auth/entra/start`)
+              }
+            >
               Sign in with Microsoft
             </button>
           </>
-        ) : <>
-          <p>Enter an email address that an administrator has explicitly approved.</p>
-          <form onSubmit={requestLink}>
-          <label htmlFor="employee-email">Work email</label>
-          <input
-            id="employee-email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="employee@example.com"
-          />
-          <button className="button primary" type="submit">
-            Send sign-in link
-          </button>
-          </form>
-        </>}
+        ) : (
+          <>
+            <p>
+              Enter an email address that an administrator has explicitly
+              approved.
+            </p>
+            <form onSubmit={requestLink}>
+              <label htmlFor="employee-email">Work email</label>
+              <input
+                id="employee-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="employee@example.com"
+              />
+              <button className="button primary" type="submit">
+                Send sign-in link
+              </button>
+            </form>
+          </>
+        )}
         {message && (
           <div className="auth-message" role="status">
             {message}
           </div>
         )}
-        <footer>{authMode === "entra" ? "Company employee access" : "Development magic link · No public signup"}</footer>
+        <footer>
+          {authMode === "entra"
+            ? "Company employee access"
+            : "Development magic link · No public signup"}
+        </footer>
       </section>
     </main>
   );

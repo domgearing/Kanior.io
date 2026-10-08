@@ -26,9 +26,19 @@
         margin-top: 1rem;
         white-space: pre-wrap;
       }
-      .history-status { display: block; color: #526173; font-size: 0.9rem; }
-      #history li { border-bottom: 1px solid #dce3ed; margin-bottom: 0.75rem; padding-bottom: 0.75rem; }
-      #history button { margin-left: 0; }
+      .history-status {
+        display: block;
+        color: #526173;
+        font-size: 0.9rem;
+      }
+      #history li {
+        border-bottom: 1px solid #dce3ed;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.75rem;
+      }
+      #history button {
+        margin-left: 0;
+      }
     </style>
   </head>
   <body>
@@ -40,27 +50,54 @@
         <button id="open-login">Sign in to Verelo</button>
         <button id="check-login">Continue after signing in</button>
         <div id="magic-link-controls">
-          <p>For local magic-link sign-in, open the sign-in link from the development mailbox in this window:</p>
-          <input id="sign-in-link" type="url" placeholder="Paste your Verelo sign-in link" style="width: 75%" />
+          <p>
+            For local magic-link sign-in, open the sign-in link from the
+            development mailbox in this window:
+          </p>
+          <input
+            id="sign-in-link"
+            type="url"
+            placeholder="Paste your Verelo sign-in link"
+            style="width: 75%"
+          />
           <button id="finish-login">Use sign-in link</button>
         </div>
       </section>
       <section id="meeting-picker" hidden>
         <form id="create-project" hidden>
-          <label>New project <input id="project-name" required maxlength="200" placeholder="Project name" /></label>
+          <label
+            >New project
+            <input
+              id="project-name"
+              required
+              maxlength="200"
+              placeholder="Project name"
+          /></label>
           <button>Create project</button>
         </form>
-        <label>Project <select id="projects"></select></label>
-        <label>Meeting <select id="meetings"></select></label>
+        <label
+          >Project
+          <select id="projects"></select
+        ></label>
+        <label
+          >Meeting
+          <select id="meetings"></select
+        ></label>
         <button id="select-meeting">Use meeting</button>
         <form id="create-meeting">
           <input id="meeting-title" required placeholder="New meeting title" />
-          <label><input id="meeting-consent" type="checkbox" required /> I confirm everyone required to consent has agreed to this recording.</label>
+          <label
+            ><input id="meeting-consent" type="checkbox" required /> I confirm
+            everyone required to consent has agreed to this recording.</label
+          >
           <button>Create and select meeting</button>
         </form>
         <button id="sign-out">Sign out</button>
       </section>
-      <p>Choose a meeting before recording. For local capture, select a screen or window with audio.</p>
+      <p>
+        Choose a meeting before recording. For local capture, select a screen or
+        window with audio.
+      </p>
       <div id="capture-controls" aria-label="Capture controls" hidden>
         <button id="start">Start recording</button>
         <button id="pause">Pause</button>
@@ -71,7 +108,10 @@
       </div>
       <output id="status" aria-live="polite">Loading capture state…</output>
       <p id="processing" role="status"></p>
-      <section id="history-section" hidden><h2>Recording history</h2><ul id="history"></ul></section>
+      <section id="history-section" hidden>
+        <h2>Recording history</h2>
+        <ul id="history"></ul>
+      </section>
     </main>
     <script>
       const status = document.querySelector("#status");
@@ -104,7 +144,8 @@
         return btoa(binary);
       };
       const showError = (error) => {
-        status.textContent = error instanceof Error ? error.message : "Request failed";
+        status.textContent =
+          error instanceof Error ? error.message : "Request failed";
       };
       const setSelectedMeeting = async (documentId) => {
         const document = await window.vereloDesktop.meetings.select(documentId);
@@ -115,49 +156,57 @@
       };
       const refreshHistory = async () => {
         const items = await window.vereloDesktop.meetings.history();
-        history.replaceChildren(...items.map((item) => {
-          const row = document.createElement("li");
-          const title = document.createElement("strong");
-          title.textContent = `${item.source_kind === "audio" ? "Audio recording" : "Transcript upload"} · ${new Date(item.created_at).toLocaleString()}`;
-          const progress = document.createElement("span");
-          progress.className = "history-status";
-          const names = {
-            source_pending: "Uploading source",
-            quarantined: "Checking source",
-            source_accepted: "Audio stored in Verelo",
-            transcription_queued: "Waiting for transcription",
-            transcription_submitted: "Transcription submitted",
-            transcription_processing: "Transcription processing",
-            raw_transcript_stored: "Preparing transcript",
-            draft_ready: "Transcript ready for review",
-            approval_required: "Transcript ready for review",
-            approved: "Approved",
-            publishing: "Publishing",
-            published: "Published",
-            failed_retryable: "Processing failed · retry available",
-            failed_terminal: "Processing failed · contact administrator",
-            aborted: "Processing stopped",
-          };
-          progress.textContent = names[item.state] || item.state.replaceAll("_", " ");
-          row.append(title, progress);
-          if (item.safe_error_code) {
-            const issue = document.createElement("span");
-            issue.className = "history-status";
-            issue.textContent = `Issue: ${item.safe_error_code.replaceAll("_", " ")}`;
-            row.append(issue);
-          }
-          if (item.can_retry) {
-            const retry = document.createElement("button");
-            retry.textContent = "Retry processing";
-            retry.addEventListener("click", async () => {
-              retry.disabled = true;
-              try { await window.vereloDesktop.meetings.retry(item.ingestion_id); await refreshHistory(); }
-              catch (error) { showError(error); retry.disabled = false; }
-            });
-            row.append(retry);
-          }
-          return row;
-        }));
+        history.replaceChildren(
+          ...items.map((item) => {
+            const row = document.createElement("li");
+            const title = document.createElement("strong");
+            title.textContent = `${item.source_kind === "audio" ? "Audio recording" : "Transcript upload"} · ${new Date(item.created_at).toLocaleString()}`;
+            const progress = document.createElement("span");
+            progress.className = "history-status";
+            const names = {
+              source_pending: "Uploading source",
+              quarantined: "Checking source",
+              source_accepted: "Audio stored in Verelo",
+              transcription_queued: "Waiting for transcription",
+              transcription_submitted: "Transcription submitted",
+              transcription_processing: "Transcription processing",
+              raw_transcript_stored: "Preparing transcript",
+              draft_ready: "Transcript ready for review",
+              approval_required: "Transcript ready for review",
+              approved: "Approved",
+              publishing: "Publishing",
+              published: "Published",
+              failed_retryable: "Processing failed · retry available",
+              failed_terminal: "Processing failed · contact administrator",
+              aborted: "Processing stopped",
+            };
+            progress.textContent =
+              names[item.state] || item.state.replaceAll("_", " ");
+            row.append(title, progress);
+            if (item.safe_error_code) {
+              const issue = document.createElement("span");
+              issue.className = "history-status";
+              issue.textContent = `Issue: ${item.safe_error_code.replaceAll("_", " ")}`;
+              row.append(issue);
+            }
+            if (item.can_retry) {
+              const retry = document.createElement("button");
+              retry.textContent = "Retry processing";
+              retry.addEventListener("click", async () => {
+                retry.disabled = true;
+                try {
+                  await window.vereloDesktop.meetings.retry(item.ingestion_id);
+                  await refreshHistory();
+                } catch (error) {
+                  showError(error);
+                  retry.disabled = false;
+                }
+              });
+              row.append(retry);
+            }
+            return row;
+          }),
+        );
       };
       const refreshMeetings = async () => {
         await window.vereloDesktop.meetings.clear();
@@ -172,16 +221,23 @@
           return;
         }
         const items = await window.vereloDesktop.meetings.list(projects.value);
-        meetings.replaceChildren(...items.map((item) => new Option(item.title, item.document_id)));
+        meetings.replaceChildren(
+          ...items.map((item) => new Option(item.title, item.document_id)),
+        );
         document.querySelector("#select-meeting").disabled = items.length === 0;
       };
       const setRecordingActive = (active) => {
         recordingActive = active;
         projects.disabled = active;
         meetings.disabled = active;
-        createProject.querySelectorAll("input,button").forEach((item) => { item.disabled = active; });
-        createMeeting.querySelectorAll("input,button").forEach((item) => { item.disabled = active; });
-        document.querySelector("#select-meeting").disabled = active || !meetings.value;
+        createProject.querySelectorAll("input,button").forEach((item) => {
+          item.disabled = active;
+        });
+        createMeeting.querySelectorAll("input,button").forEach((item) => {
+          item.disabled = active;
+        });
+        document.querySelector("#select-meeting").disabled =
+          active || !meetings.value;
         document.querySelector("#sign-out").disabled = active;
         document.querySelector("#start").disabled = active;
       };
@@ -200,11 +256,14 @@
         mode.textContent = `Signed in as ${identity.displayName}. Select a meeting.`;
         const items = await window.vereloDesktop.meetings.projects();
         const writable = items.filter((item) => item.my_role !== "reader");
-        projects.replaceChildren(...writable.map((item) => new Option(item.name, item.project_id)));
+        projects.replaceChildren(
+          ...writable.map((item) => new Option(item.name, item.project_id)),
+        );
         await refreshMeetings();
-        if (!writable.length) mode.textContent = identity.canCreateProject
-          ? "Create a project below, then create or select a meeting."
-          : "Ask a project owner for access to a writable project.";
+        if (!writable.length)
+          mode.textContent = identity.canCreateProject
+            ? "Create a project below, then create or select a meeting."
+            : "Ask a project owner for access to a writable project.";
       };
       window.vereloDesktop.auth.onExpired(() => {
         refreshAuth().catch(showError);
@@ -212,26 +271,44 @@
       window.vereloDesktop.auth.onSignedIn(() => {
         refreshAuth().catch(showError);
       });
-      window.vereloDesktop.auth.mode().then((value) => {
-        document.querySelector("#magic-link-controls").hidden = value.provider === "entra";
-      }).catch(showError);
+      window.vereloDesktop.auth
+        .mode()
+        .then((value) => {
+          document.querySelector("#magic-link-controls").hidden =
+            value.provider === "entra";
+        })
+        .catch(showError);
       document.querySelector("#open-login").addEventListener("click", () => {
         window.vereloDesktop.auth.open().catch(showError);
       });
       document.querySelector("#check-login").addEventListener("click", () => {
         refreshAuth().catch(showError);
       });
-      document.querySelector("#finish-login").addEventListener("click", async () => {
-        try {
-          await window.vereloDesktop.auth.complete(document.querySelector("#sign-in-link").value);
-          await refreshAuth();
-        } catch (error) { showError(error); }
-      });
-      document.querySelector("#sign-out").addEventListener("click", async () => {
-        try { await window.vereloDesktop.auth.logout(); await refreshAuth(); }
-        catch (error) { showError(error); }
-      });
-      projects.addEventListener("change", () => refreshMeetings().catch(showError));
+      document
+        .querySelector("#finish-login")
+        .addEventListener("click", async () => {
+          try {
+            await window.vereloDesktop.auth.complete(
+              document.querySelector("#sign-in-link").value,
+            );
+            await refreshAuth();
+          } catch (error) {
+            showError(error);
+          }
+        });
+      document
+        .querySelector("#sign-out")
+        .addEventListener("click", async () => {
+          try {
+            await window.vereloDesktop.auth.logout();
+            await refreshAuth();
+          } catch (error) {
+            showError(error);
+          }
+        });
+      projects.addEventListener("change", () =>
+        refreshMeetings().catch(showError),
+      );
       meetings.addEventListener("change", () => {
         controls.hidden = true;
         historySection.hidden = true;
@@ -245,28 +322,37 @@
           );
           const items = await window.vereloDesktop.meetings.projects();
           const writable = items.filter((item) => item.my_role !== "reader");
-          projects.replaceChildren(...writable.map((item) => new Option(item.name, item.project_id)));
+          projects.replaceChildren(
+            ...writable.map((item) => new Option(item.name, item.project_id)),
+          );
           projects.value = project.project_id;
           await refreshMeetings();
           document.querySelector("#project-name").value = "";
           mode.textContent = `Project ${project.name} is ready. Create a meeting below.`;
-        } catch (error) { showError(error); }
+        } catch (error) {
+          showError(error);
+        }
       });
-      document.querySelector("#select-meeting").addEventListener("click", () => {
-        setSelectedMeeting(meetings.value).catch(showError);
-      });
+      document
+        .querySelector("#select-meeting")
+        .addEventListener("click", () => {
+          setSelectedMeeting(meetings.value).catch(showError);
+        });
       createMeeting.addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
           const item = await window.vereloDesktop.meetings.create(
-            projects.value, document.querySelector("#meeting-title").value,
+            projects.value,
+            document.querySelector("#meeting-title").value,
           );
           await refreshMeetings();
           meetings.value = item.document_id;
           await setSelectedMeeting(item.document_id);
           document.querySelector("#meeting-title").value = "";
           document.querySelector("#meeting-consent").checked = false;
-        } catch (error) { showError(error); }
+        } catch (error) {
+          showError(error);
+        }
       });
       window.vereloDesktop.capture.mode().then((value) => {
         captureAdapter = value.adapter;
@@ -371,7 +457,9 @@
           microphoneStream?.getTracks().forEach((track) => track.stop());
           await audioContext?.close();
           recorder = undefined;
-        } catch (error) { showError(error); }
+        } catch (error) {
+          showError(error);
+        }
       });
       document.querySelectorAll("button[data-action]").forEach((button) => {
         button.addEventListener("click", async () => {

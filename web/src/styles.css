@@ -1506,9 +1506,18 @@ input {
   margin-right: 0.5rem;
   width: 1rem;
 }
-.lifecycle-steps li.complete::before { content: "✓"; color: #167449; }
-.lifecycle-steps li.current { color: #172235; font-weight: 700; }
-.lifecycle-steps li.current::before { content: "●"; color: #4d52ba; }
+.lifecycle-steps li.complete::before {
+  content: "✓";
+  color: #167449;
+}
+.lifecycle-steps li.current {
+  color: #172235;
+  font-weight: 700;
+}
+.lifecycle-steps li.current::before {
+  content: "●";
+  color: #4d52ba;
+}
 
 .organized-transcript section {
   border-left: 3px solid var(--accent, #6d5dfc);

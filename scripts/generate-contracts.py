@@ -66,7 +66,7 @@ def generate_json():
                     },
                 ]
             )
-        if op.request:
+        if op.csrf and op.method in {"post", "put", "patch", "delete"}:
             parameters.append(
                 {
                     "name": "X-CSRF-Token",
@@ -116,6 +116,8 @@ def generate_json():
             "parameters": parameters,
             "responses": responses,
         }
+        if not op.authenticated:
+            operation["security"] = []
         if op.request:
             operation["requestBody"] = {
                 "required": True,
@@ -125,7 +127,7 @@ def generate_json():
     document = {
         "openapi": "3.1.0",
         "info": {
-            "title": "Kanior foundation contract",
+            "title": "Verelo foundation contract",
             "version": "0.1.0",
             "description": NOTICE + " Design contract only; endpoints are not yet implemented. "
             "Reserved components are not public routes.",
@@ -134,7 +136,7 @@ def generate_json():
         "paths": paths,
         "components": {
             "securitySchemes": {
-                "sessionCookie": {"type": "apiKey", "in": "cookie", "name": "kanior_session"}
+                "sessionCookie": {"type": "apiKey", "in": "cookie", "name": "verelo_session"}
             },
             "schemas": combined["$defs"],
         },
@@ -201,7 +203,7 @@ def main():
     if not args.check:
         generate(ROOT)
         return 0
-    with tempfile.TemporaryDirectory(prefix="kanior-contracts-") as directory:
+    with tempfile.TemporaryDirectory(prefix="verelo-contracts-") as directory:
         temp = Path(directory)
         generate(temp)
         expected = {p.relative_to(temp) for p in temp.rglob("*") if p.is_file()}

@@ -25,7 +25,7 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-name="kanior-pr-gate-pg-$$"
+name="verelo-pr-gate-pg-$$"
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
@@ -33,18 +33,18 @@ section "Start disposable PostgreSQL for migration validation"
 docker run -d --rm \
   --name "$name" \
   -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=kanior_pr_gate \
+  -e POSTGRES_DB=verelo_pr_gate \
   -p 127.0.0.1::5432 \
   pgvector/pgvector:0.8.1-pg17 >/dev/null
 
 for _ in $(seq 1 30); do
-  if docker exec "$name" pg_isready -U postgres -d kanior_pr_gate >/dev/null 2>&1; then
+  if docker exec "$name" pg_isready -U postgres -d verelo_pr_gate >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
 
-docker exec "$name" pg_isready -U postgres -d kanior_pr_gate >/dev/null
+docker exec "$name" pg_isready -U postgres -d verelo_pr_gate >/dev/null
 port="$(docker port "$name" 5432/tcp | awk -F: '{print $NF}')"
-export DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:${port}/kanior_pr_gate"
+export DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:${port}/verelo_pr_gate"
 run "python -m uv run alembic upgrade head"

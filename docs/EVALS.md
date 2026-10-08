@@ -1,8 +1,8 @@
-# KaniorAI Eval Policy
+# Verelo Eval Policy
 
 ## Purpose
 
-Tests answer "does the software behave as implemented?" Evals answer "does KaniorAI still satisfy the product correctness and safety properties we care about?"
+Tests answer "does the software behave as implemented?" Evals answer "does Verelo still satisfy the product correctness and safety properties we care about?"
 
 Blocking PR eval thresholds are stored in `evals/manifest.toml`. The manifest is normative; prose in this document explains the policy.
 

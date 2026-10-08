@@ -81,16 +81,19 @@ class ContractTests(unittest.TestCase):
                     case["schema_valid"],
                 )
 
-    def test_mutations_require_session_csrf_and_closed_body(self) -> None:
+    def test_mutation_security_and_closed_bodies(self) -> None:
         self.assertEqual(self.openapi["security"], [{"sessionCookie": []}])
         for op in OPERATIONS:
-            if op.request is None:
+            if op.method not in {"post", "put", "patch", "delete"}:
                 continue
             with self.subTest(operation=op.operation_id):
                 route = self.openapi["paths"]["/api/v1" + op.path][op.method]
-                self.assertTrue(
-                    any(p["name"] == "X-CSRF-Token" and p["required"] for p in route["parameters"])
-                )
+                csrf_headers = [p for p in route["parameters"] if p["name"] == "X-CSRF-Token"]
+                self.assertEqual(bool(csrf_headers), op.csrf)
+                if not op.authenticated:
+                    self.assertEqual(route["security"], [])
+                if op.request is None:
+                    continue
                 schema = self.openapi["components"]["schemas"][op.request.__name__]
                 self.assertFalse(schema["additionalProperties"])
                 self.assertTrue(

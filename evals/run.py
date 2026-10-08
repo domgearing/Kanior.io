@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KaniorAI eval runner.
+"""Verelo eval runner.
 
 Each eval command must print one JSON object as its final non-empty stdout line:
     {"metric": "metric_name", "value": 0.97, "details": "optional"}
@@ -67,7 +67,7 @@ def main() -> int:
         return 2
 
     failures = 0
-    print(f"KaniorAI eval suite: {args.suite}")
+    print(f"Verelo eval suite: {args.suite}")
     print("=" * 72)
 
     for name in names:

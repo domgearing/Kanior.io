@@ -1,6 +1,6 @@
 # Data model contract
 
-Status: foundation v1; later entities are reserved, not permission to implement later phases.
+Status: Phase 0–2 MVP schema through migration `0009_ingestion_operations`; later entities remain reserved.
 Authority: `ARCHITECTURE.md` §§8–12, 20–25, 35 and `PROJECT_SPEC.md` §§8, 12–14. Architecture wins conflicts. API shapes are defined in `contracts/models.py`; database models and migrations must implement this document, not be generated from public DTOs.
 
 ## Naming and common rules
@@ -26,9 +26,11 @@ Tenant policy configuration stores explicit employee UUID grants for `projects:c
 
 | Table | Required additional columns | Constraints / relationships / indexes |
 |---|---|---|
-| `tenants` | `entra_tenant_id uuid`, `policy_config_ref text`, `region text` | Entra tenant unique; config reference/region provisioned, no credentials or invented company-policy defaults. |
+| `tenants` | `entra_tenant_id uuid NULL`, `policy_config_ref text`, `region text` | Entra tenant unique when configured; local magic-link tenants leave it null. Config reference/region provisioned, no credentials or invented company-policy defaults. |
 | `workspaces` | `tenant_id uuid`, `name varchar(200)`, `is_default boolean` | FK tenant; partial unique `(tenant_id) WHERE is_default`; provisioning must create exactly one default, transactional service check prevents deleting/disabling it. |
-| `users` | `tenant_id uuid`, `entra_object_id uuid`, `display_name varchar(200)`, `email varchar(320)`, `enabled boolean`, `authorization_epoch bigint DEFAULT 0` | Unique `(tenant_id, entra_object_id)`; email is display-only, not unique identity; epoch >= 0. Tenant FK. |
+| `users` | `tenant_id uuid`, `entra_object_id uuid NULL`, `display_name varchar(200)`, `email varchar(320)`, `enabled boolean`, `authorization_epoch bigint DEFAULT 0` | Entra object ID is a compatibility field and unique when present; identity accounts are authoritative. Email is display-only here, not a key; epoch >= 0. Tenant FK. |
+| `identity_accounts` | `tenant_id`, `workspace_id`, `user_id`, `provider`, immutable `subject`, optional normalized login email, enabled state | Provider-to-internal-user mapping. Magic-link email is a unique mutable locator; internal user UUID is the principal. Entra uses immutable tenant/object identity. |
+| `magic_link_challenges`, `authentication_events` | Hashed single-use credential and content-free authentication metadata | Private pre-authentication boundary; no plaintext token, email, cookie, or CSRF value. Ten-minute expiry and atomic consume/session issuance. |
 | `projects` | `tenant_id uuid`, `workspace_id uuid`, `name varchar(200)`, `owner_user_id uuid`, `retention_policy_ref text`, `transcript_approval_policy_ref text`, `authorization_epoch bigint DEFAULT 0`, `state text DEFAULT 'active'` | Composite workspace FK; `(tenant_id, owner_user_id)` user FK. State `active` or `tombstoned` in this slice. Owner must be an enabled owner membership in same project. Index `(tenant_id, workspace_id, created_at, id)` for lists. Policy refs come from provisioned configuration. |
 | `project_memberships` | `tenant_id uuid`, `workspace_id uuid`, `project_id uuid`, `user_id uuid`, `role text`, `enabled boolean`, `revision bigint DEFAULT 1` | Full-scope project FK; tenant/user FK; unique `(tenant_id, project_id, user_id)`; role `reader`, `contributor`, `project_owner`; revision >= 1. Index `(tenant_id, user_id, enabled, project_id)`. |
 | `documents` | `tenant_id uuid`, `workspace_id uuid`, `project_id uuid`, `title varchar(300)`, `meeting_date timestamptz`, `language varchar(35)`, `created_by uuid`, `consent_policy_version varchar(100)`, `consent_acknowledged_by uuid`, `consent_acknowledged_at timestamptz`, `state text DEFAULT 'created'` | Full-scope project FK; tenant/actor FKs. Consent is recorded from authenticated actor and server clock; policy version must match provisioned policy. State `created` or `tombstoned` for this slice. Index `(tenant_id, workspace_id, project_id, created_at, id)`. |
@@ -37,7 +39,33 @@ Tenant policy configuration stores explicit employee UUID grants for `projects:c
 
 Project creation inserts project and creator's owner membership atomically, after capability check. The owner invariant is checked at transaction commit (a deferred constraint trigger is suitable); partial state must never commit. Membership mutations increment membership revision and project authorization epoch and insert audit plus `access.changed` outbox event in one transaction. In this slice, reject demotion/removal of `owner_user_id`; ownership transfer is a separate deferred API. Additional owner memberships are allowed. Disabled users cannot access content even if their membership remains enabled.
 
-`active_transcript_version_id` is absent from foundation storage and API. Add it with publication migrations, nullable until publication, and a composite FK proving the version belongs to the same document. Do not insert placeholder versions or expose a fake published state.
+`documents.active_transcript_version_id` is nullable until publication and has a composite FK proving
+the version belongs to the same document. Publication changes it only in the atomic publication
+transaction; no placeholder version or synthetic published state is inserted.
+
+## Implemented Phase 2 workflow records
+
+`ingestions` is the mutable coordinator record for one immutable source attempt. It carries full
+tenant/workspace/project/document scope, creator, source kind/name/media declaration, expected and
+uploaded size/hash, acknowledged chunk count, source/draft references, canonical workflow state and
+stage, safe failure/retry fields, operation/payload identity, gap count, revision, and timestamps.
+The state constraint is the approved state machine in plan 005. Operation key is unique per project.
+
+`ingestion_chunks` is append-only, ordered by ingestion/sequence, with immutable object reference,
+byte length, SHA-256, and full scope. Finalization requires a contiguous sequence plus exact aggregate
+length/hash before creating an accepted source asset. `capture_sessions.ingestion_id` joins completed
+recording recovery to this same workflow. `raw_transcripts.ingestion_id` provides provenance from
+attempt to immutable raw provider bytes. Both are nullable only for records predating migration 0008.
+
+`ingestion_operations` durably binds each finalization, provider-stage, publication, retry, or abort
+operation key to its scoped ingestion, action, payload hash, and outcome reference. A same-key replay
+must have the same payload; a conflicting payload is rejected without changing workflow state.
+
+`source_assets`, `raw_transcripts`, `transcript_versions`, `transcript_approvals`, `passages`, and
+`jobs` implement the immutable publication graph. Draft correction creates a new version; it never
+updates canonical bytes. Approval binds version and hash. Publication updates version state,
+document active pointer, ingestion state, passages, index intents, audit, and outbox in one database
+transaction after content-addressed objects have been verified.
 
 ## Reserved later entities and constraints
 
@@ -45,11 +73,7 @@ These requirements are extracted from architecture §9 and spec §8.2. Physical 
 
 | Entities | Parent scope and required invariants | Phase |
 |---|---|---|
-| `capture_sessions`, `capture_chunks`, `source_assets` | Document scope; chunks unique by session/sequence with hashes and durable acknowledgement. Original objects immutable, quarantine required; source asset holds MIME, bytes/hash, duration and provenance. | 1 storage foundation / 2 ingestion |
-| `raw_transcripts` | Document and optional same-document audio asset; append-only raw provider JSON/parsed bytes and hashes, provider/config provenance. | 2 |
-| `transcript_versions` | Document, raw lineage, same-document parent version; unique document/version number. Frozen canonical object/hash/byte length, cleanup/correction manifest, approval and publication metadata. Approved bytes cannot be overwritten. | 2 |
-| `transcript_approvals` | Same-scope version plus exact content hash, service/user approver, method/policy version/time/reason. Immutable decision; revocation is a separate recorded event. | 2 |
-| `speakers`, `passages`, `word_alignments` | Version scope; passage/word ordinal unique within version. Byte bounds fit canonical object and UTF-8 boundaries; span hashes; nullable speaker/timing. Passage speaker and alignments must belong to same version. | 2 |
+| `speakers`, `word_alignments` | Version scope; ordinal unique within version. Byte bounds fit canonical object and UTF-8 boundaries; nullable speaker/timing. The MVP preserves reconciled segment metadata in the immutable parsed object/manifest; normalized speaker/alignment tables remain a later refinement. | 2 refinement |
 | `passage_indexes` | Same-scope passage/version; unique passage/model/generation; embedding dimension and generation pinned. Derived/rebuildable, never quote source. | 2–3 |
 | `evidence_runs`, `evidence_candidates` | Principal and project scope; version/index generation/authorization epoch/expiry sealed server-side. Candidate ID unique in run and FK to permitted same-project passage/version. | 3 |
 | `source_spans` | Same-scope passage/version, absolute byte bounds/hash; server-issued and immutable, optional audio anchor and origin selection. | 3 |

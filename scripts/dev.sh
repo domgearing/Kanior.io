@@ -12,7 +12,7 @@ fi
 
 case "${1:-}" in
   api)
-    exec python -m uv run uvicorn api.main:app --reload --host 127.0.0.1 --port "${KANIOR_API_PORT:-8000}"
+    exec python -m uv run uvicorn api.main:app --reload --host 127.0.0.1 --port "${VERELO_API_PORT:-8000}"
     ;;
   worker)
     exec python -m uv run python -m workers

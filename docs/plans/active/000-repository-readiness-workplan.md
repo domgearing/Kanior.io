@@ -1,7 +1,7 @@
-# KaniorAI Repository Readiness Workplan
+# Verelo Repository Readiness Workplan
 
 **Plan ID:** 000-repository-readiness  
-**Purpose:** Prepare the KaniorAI GitHub repository and codebase so feature development can begin safely with coding agents.  
+**Purpose:** Prepare the Verelo GitHub repository and codebase so feature development can begin safely with coding agents.
 **Scope:** Repository architecture alignment, contracts, documentation, local infrastructure, test/eval scaffolding, CI, and developer ergonomics.  
 **Out of scope:** Product feature implementation beyond the minimum code required to prove the repository/toolchain/contracts work.
 
@@ -220,7 +220,7 @@ If equivalent ADR(s) already exist, update rather than duplicate.
 Target structure:
 
 ```text
-kanior-ai/
+verelo/
 ├── AGENTS.md
 ├── README.md
 ├── ARCHITECTURE.md
@@ -648,7 +648,7 @@ No secret provider credentials are required.
 
 The README must answer, in this order:
 
-1. What is KaniorAI?
+1. What is Verelo?
 2. What is the current MVP scope?
 3. What architecture/stack is used?
 4. What is the top-level repository layout?

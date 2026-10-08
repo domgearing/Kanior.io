@@ -25,11 +25,12 @@ When two sources conflict, follow the higher source and reconcile the stale lowe
 | Database and vectors | PostgreSQL 17 with pgvector | LOCKED | Architecture §4; ADR-001 |
 | ORM and migrations | SQLAlchemy and version-controlled Alembic migrations | LOCKED | Architecture §4; ADR-001 |
 | Jobs and events | PostgreSQL durable jobs with leases, retries, idempotency, and transactional outbox; no baseline Redis queue | LOCKED | Architecture §§4, 22, 25; ADR-001 |
+| Controlled cleanup approval | Formatting plus narrowly allowlisted filler removal and stutter deduplication may be approved automatically only when the deterministic policy-v2 validator accepts the exact output; all other wording changes require human approval | LOCKED | ADR-004; product owner decision 2026-09-21 |
 | Outbox dispatch | Dispatcher operates under a provisioned service identity in explicit tenant/workspace/project scope without `BYPASSRLS` | LOCKED | Architecture §§21–22; ADR-003 |
 | Object storage | Private Backblaze B2 behind `ObjectStorage`; private Azure Blob is the managed alternative | LOCKED | Architecture §§4, 7, 13 |
 | Speech recognition | AssemblyAI Universal-3.5 Pro, pinned as `universal-3-5-pro`, behind `TranscriptionProvider` | LOCKED | Architecture §§4, 7 |
 | Capture | Recall Desktop SDK behind the capture adapter and its feasibility gate | LOCKED | Architecture §§4, 7; `docs/INTEGRATIONS.md` |
-| Identity | Single-tenant Microsoft Entra authorization code flow with PKCE and server-held sessions | LOCKED | Architecture §§4, 20 |
+| Identity | Provider-neutral adapter; explicit-allowlist magic links in local/test only; single-tenant Entra authorization code flow with PKCE for confidential/production traffic; shared server-held sessions | LOCKED | Architecture §§4, 20; ADR-005 |
 | Microsoft 365 | One-way, immutable, versioned Microsoft Graph/OneDrive export behind an adapter | LOCKED | Architecture §19 |
 | Contract generation | Edit Python contract sources; generate OpenAPI, JSON Schema, and TypeScript declarations | LOCKED | ADR-002; `schemas/README.md` |
 | Repository layout | Top-level `api/`, `domain/`, `workers/`, `connectors/`, `web/`, `desktop/`, `migrations/`, `schemas/`, `tests/`, `evals/`, `infra/`, `docs/`, and `scripts/` | LOCKED | Architecture §5; ADR-001 |
@@ -44,7 +45,7 @@ These items do not block synthetic-data implementation. They must be resolved by
 
 | Area | Question | Default / constraint | Owner / phase |
 | --- | --- | --- | --- |
-| Entra configuration | Which tenant, assigned employee group, application registration, and secondary corporate domains are approved? | Exact tenant and assigned enabled employees only | IT; before confidential pilot |
+| Entra configuration | Which tenant, assigned employee group, application registration, and secondary corporate domains are approved? | Local magic links do not answer this; exact tenant and assigned enabled employees only before confidential traffic | IT; before confidential pilot |
 | Regions and processors | Which Recall, AssemblyAI, OpenAI, compute, and storage regions and terms are approved? | Synthetic adapters only until approved | Security / IT; before live provider use |
 | Provider retention | What does each approved endpoint/account retain and how is deletion verified? | Record actual behavior; never assume zero retention | Security; before confidential pilot |
 | Recall feasibility | Can the supported desktop/OS matrix provide the required audio handoff and recovery behavior? | Complete the documented R1 gate before connector implementation | Product owner; before live capture |

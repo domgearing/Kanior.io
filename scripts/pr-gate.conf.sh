@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Central command configuration for KaniorAI's PR gate.
+# Central command configuration for Verelo's PR gate.
 # Change commands here when the repository toolchain changes; do not duplicate
 # command definitions in CI.
 

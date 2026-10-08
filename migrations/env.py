@@ -1,4 +1,4 @@
-"""Alembic environment for reviewed, explicit Kanior migrations."""
+"""Alembic environment for reviewed, explicit Verelo migrations."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ config = context.config
 # The environment takes precedence over the local development placeholder in
 # alembic.ini and is never written back to the repository.
 if migrator_url := (
-    os.environ.get("KANIOR_MIGRATOR_DATABASE_URL")
-    or os.environ.get("KANIOR_DATABASE_URL")
+    os.environ.get("VERELO_MIGRATOR_DATABASE_URL")
+    or os.environ.get("VERELO_DATABASE_URL")
     or os.environ.get("DATABASE_URL")
 ):
     config.set_main_option("sqlalchemy.url", normalize_database_url(migrator_url))

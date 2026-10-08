@@ -1,17 +1,17 @@
-name: kanior-local
+name: verelo-local
 
 services:
   postgres:
     image: pgvector/pgvector:0.8.1-pg17
     environment:
-      POSTGRES_USER: ${KANIOR_POSTGRES_USER:-kanior_admin}
-      POSTGRES_PASSWORD: ${KANIOR_POSTGRES_PASSWORD:-kanior_admin}
-      POSTGRES_DB: ${KANIOR_POSTGRES_DB:-kanior}
-      KANIOR_MIGRATOR_DB_PASSWORD: ${KANIOR_MIGRATOR_DB_PASSWORD:-kanior_migrator}
-      KANIOR_API_DB_PASSWORD: ${KANIOR_API_DB_PASSWORD:-kanior_api}
-      KANIOR_WORKER_DB_PASSWORD: ${KANIOR_WORKER_DB_PASSWORD:-kanior_worker}
+      POSTGRES_USER: ${VERELO_POSTGRES_USER:-verelo_admin}
+      POSTGRES_PASSWORD: ${VERELO_POSTGRES_PASSWORD:-verelo_admin}
+      POSTGRES_DB: ${VERELO_POSTGRES_DB:-verelo}
+      VERELO_MIGRATOR_DB_PASSWORD: ${VERELO_MIGRATOR_DB_PASSWORD:-verelo_migrator}
+      VERELO_API_DB_PASSWORD: ${VERELO_API_DB_PASSWORD:-verelo_api}
+      VERELO_WORKER_DB_PASSWORD: ${VERELO_WORKER_DB_PASSWORD:-verelo_worker}
     ports:
-      - "127.0.0.1:${KANIOR_POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${VERELO_POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test:
         [

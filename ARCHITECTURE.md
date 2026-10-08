@@ -228,7 +228,7 @@ The baseline implementation choices are:
 | Database/search | PostgreSQL + full-text search + pgvector | Managed PostgreSQL when required |
 | Authoritative object storage | Private Backblaze B2 | Private Azure Blob Storage is the managed alternative |
 | Budget hosting | One small DigitalOcean VM for web/API/worker plus managed/external dependencies | Azure Container Apps with separate worker pools is the managed alternative |
-| Identity | Single-tenant Microsoft Entra ID, authorization-code flow with PKCE, server-side session | Managed employee lifecycle/access review integration |
+| Identity | Provider-neutral identity boundary; allowlisted magic links in local/test only; server-side session | Single-tenant Microsoft Entra ID authorization-code flow with PKCE and managed employee lifecycle/access review integration |
 | Speech recognition | AssemblyAI Universal-3.5 Pro, pinned `universal-3-5-pro`, post-meeting, with diarization | Same provider contract with versioned speaker reconciliation and correction |
 | Transcript cleanup | Approved GPT adapter proposing narrowly permitted formatting edits | Same contract with versioned prompts/validators and regression evaluation |
 | Evidence selection / synthesis | Approved GPT deployment through an application adapter | Pin model/config versions and evaluate before upgrades |
@@ -429,7 +429,7 @@ Core responsibilities:
 
 | Module | Responsibility |
 |---|---|
-| Identity/session | Validate Entra authentication and establish server session |
+| Identity/session | Validate the configured identity provider, map to an enabled internal employee, and establish a server session |
 | Authorization | Evaluate current resource/action permission |
 | Capture/upload | Accept and validate recording/upload assets |
 | Import parser | Parse TXT/VTT/SRT/JSON into stable segments |
@@ -1045,7 +1045,13 @@ OneDrive outages do not make canonical application data unavailable.
 
 # 20. Authentication and Authorization
 
-Authentication uses a single-tenant Microsoft Entra application.
+Authentication uses a provider-neutral identity boundary. Under ADR-005, local/test development uses
+explicitly allowlisted, single-use email magic links so the scaffold requires no company tenant.
+Confidential, staging, and production traffic uses a single-tenant Microsoft Entra application.
+
+Magic-link email is a login locator only. It never becomes the stable principal or an authorization
+rule. An administrator provisions the internal user first; successful proof maps to the immutable
+internal user UUID. Public signup and email-domain-only admission are prohibited.
 
 Validate:
 
@@ -1060,9 +1066,12 @@ Validate:
 
 Email-domain checking is not a sufficient identity control.
 
-Use the Entra tenant ID plus object ID as stable external identity keys.
+For Entra, use the tenant ID plus object ID as stable external identity keys. For development magic
+links, use an immutable identity-account subject; changing email does not change the internal user ID.
 
-Server-side sessions use secure cookies and the OAuth authorization-code flow with PKCE.
+All providers issue the same opaque server-side session. Entra uses OAuth authorization-code flow
+with PKCE. Development magic links are hashed at rest, single use, ten-minute expiry, rate limited,
+Origin checked, and restricted by startup validation to local/test environments.
 
 Initial application roles:
 
@@ -1076,7 +1085,7 @@ Initial application roles:
 
 Transcript approval rights are separate from merely being able to propose a correction.
 
-The controlled-cleanup service may approve only unchanged text or edits validated under the configured cleanup policy.
+The controlled-cleanup service may approve only unchanged text or edits validated under the configured, versioned cleanup policy. Under ADR-004 the policy may include narrowly allowlisted non-formatting transformations intended to preserve meaning, but acceptance is deterministic: a model's semantic-equivalence judgment cannot authorize an edit, protected tokens and punctuation fail closed, and every accepted change retains an exact edit manifest.
 
 ---
 
@@ -1470,7 +1479,7 @@ Do not begin a later phase merely because an agent is available. Dependency read
 
 Resolve or explicitly register:
 
-- Entra tenant/application setup,
+- development identity selection and Entra tenant/application setup before confidential traffic,
 - approved processors and regions,
 - provider retention behavior,
 - OneDrive destination and least-privilege grant,
@@ -1499,7 +1508,7 @@ Build:
 - PostgreSQL + pgvector,
 - Alembic migrations,
 - tenant/workspace/project/user model,
-- Entra/session integration,
+- provider-neutral identity/session integration and development magic-link adapter,
 - project memberships,
 - PostgreSQL RLS,
 - private object-storage adapter,
@@ -1948,7 +1957,7 @@ These decisions may remain open while synthetic-data implementation proceeds, bu
 | Recording environment | Recall Desktop SDK in managed Electron app; tested client/OS support matrix | Product owner |
 | Retention/holds | Confirm or replace proposed pilot defaults | Data owner / compliance |
 | Consent | Firm-provided acknowledgement text/process | Data owner |
-| Ground truth | Approved immutable transcript version; controlled-cleanup approval initially; human approval for wording corrections; audio review optional | Product owner |
+| Ground truth | Approved immutable transcript version; controlled-cleanup approval may include ADR-004's deterministic allowlisted filler/stutter rules; all other wording corrections require human approval; audio review optional | Product owner |
 | Capacity/budget | Confirm load envelope, provider quota, and spend ceiling | Engineering / finance |
 | Recovery | Confirm RPO/RTO and backup region | IT / data owner |
 

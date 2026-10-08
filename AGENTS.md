@@ -31,7 +31,7 @@ exits with code 0.
 
 ## Model Routing
 
-KaniorAI uses explicit model routing to control cost and match model capability
+Verelo uses explicit model routing to control cost and match model capability
 to task difficulty.
 
 The authoritative routing policy is:
@@ -149,7 +149,7 @@ approved transcript
 
 Create versions. Only approved, published versions enter normal evidence search. Approval binds to the exact content hash; corrections require a new version and approval. Revocation blocks subsequent retrieval and quote delivery for the affected version.
 
-Follow architecture §§10–12 for cleanup, approval, and publication. Automatic cleanup may only apply deterministically validated policy-allowed formatting edits. Invalid cleanup preserves unchanged parsed text and still passes through approval. Do not silently broaden cleanup to wording changes. Publish the active version pointer and outbox event atomically after the required lineage, approval, passage, index, and concurrency checks.
+Follow architecture §§10–12 and ADR-004 for cleanup, approval, and publication. Automatic cleanup may apply formatting plus only the versioned, deterministically validated non-formatting rules explicitly allowlisted by policy. A model's semantic judgment cannot expand that allowlist. Invalid cleanup preserves unchanged parsed text and still passes through approval. Do not silently broaden cleanup rules. Publish the active version pointer and outbox event atomically after the required lineage, approval, passage, index, and concurrency checks.
 
 ---
 
@@ -260,7 +260,7 @@ Test access using direct API calls, not merely UI behavior.
 
 Any endpoint receiving an ID must assume that ID may have been guessed.
 
-Follow architecture §§20–21 for Entra employee assignment, server sessions, roles, and defense in depth. Enforce API/service checks, PostgreSQL RLS, scoped queries, worker revalidation, and delivery authorization. Administrative access does not automatically grant transcript-read access. Private object keys do not grant access; baseline audio playback uses an authorized API.
+Follow architecture §§20–21 and ADR-005 for provider-neutral identity, explicitly allowlisted development magic links, Entra employee assignment for production, server sessions, roles, and defense in depth. Enforce API/service checks, PostgreSQL RLS, scoped queries, worker revalidation, and delivery authorization. Administrative access does not automatically grant transcript-read access. Private object keys do not grant access; baseline audio playback uses an authorized API.
 
 Keep provider credentials out of browser/desktop bundles. Use separate development, staging, and production resources/identities, with synthetic or explicitly approved de-identified data outside production.
 
@@ -406,7 +406,7 @@ Follow architecture §37 for ADR contents and §4 for locked implementation choi
 
 - FastAPI/Python API strategy,
 - PostgreSQL/pgvector,
-- Entra identity strategy,
+- provider-neutral identity strategy with local/test magic links and production Entra,
 - transcript approval/version model,
 - deterministic quote renderer,
 - baseline storage provider,
@@ -444,7 +444,7 @@ The approved, published transcript is the quote source of truth. Apply the compl
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Kanior.io** (56170 symbols, 176209 relationships, 689 execution flows).
+This project is indexed by GitNexus as **verelo.io** (56170 symbols, 176209 relationships, 689 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
@@ -468,10 +468,10 @@ This project is indexed by GitNexus as **Kanior.io** (56170 symbols, 176209 rela
 
 | Resource | Use for |
 | --- | --- |
-| `gitnexus://repo/Kanior.io/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Kanior.io/clusters` | All functional areas |
-| `gitnexus://repo/Kanior.io/processes` | All execution flows |
-| `gitnexus://repo/Kanior.io/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/verelo.io/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/verelo.io/clusters` | All functional areas |
+| `gitnexus://repo/verelo.io/processes` | All execution flows |
+| `gitnexus://repo/verelo.io/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

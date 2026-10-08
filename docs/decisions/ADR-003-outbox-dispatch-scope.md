@@ -18,7 +18,7 @@ jobs or isolation acceptance gates have passed.
 ## Decision
 
 Use per-tenant/workspace iteration under a provisioned service identity, with a
-project scope for each dispatch transaction. Keep `kanior_worker` restricted by
+project scope for each dispatch transaction. Keep `verelo_worker` restricted by
 RLS. Do not add a bypass role, a global content grant, a migration-role connection
 or an unrestricted security-definer queue reader.
 

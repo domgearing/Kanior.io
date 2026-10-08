@@ -1,4 +1,4 @@
-# Set up KaniorAI's PR gate in GitHub
+# Set up Verelo's PR gate in GitHub
 
 ## 1. Commit the gate files
 

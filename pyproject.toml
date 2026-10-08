@@ -1,20 +1,25 @@
 [project]
-name = "kanior"
+name = "verelo"
 version = "0.1.0"
 description = "Secure internal transcript intelligence platform"
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "alembic>=1.15.2,<1.16",
+  "av==18.1.0",
+  "boto3==1.43.109",
   "fastapi>=0.141.1,<0.142",
+  "httpx>=0.28.1,<0.29",
+  "msal==1.39.0",
+  "PyJWT[crypto]==2.15.1",
   "psycopg[binary]>=3.2.6,<3.3",
   "pydantic-settings>=2.8.1,<2.9",
   "sqlalchemy>=2.0.40,<2.1",
+  "svix==2.7.0",
   "uvicorn[standard]>=0.34.2,<0.35",
 ]
 
 [dependency-groups]
 dev = [
-  "httpx>=0.28.1,<0.29",
   "jsonschema==4.25.1",
   "mypy>=1.15.0,<1.16",
   "openapi-spec-validator==0.7.2",

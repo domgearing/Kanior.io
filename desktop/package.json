@@ -1,10 +1,10 @@
 {
-  "name": "@kanior/desktop",
+  "name": "@verelo/desktop",
   "version": "0.1.0",
   "private": true,
   "main": "dist/main.js",
   "scripts": {
-    "dev": "pnpm build && electron .",
+    "dev": "corepack pnpm build && node scripts/launch-electron.mjs",
     "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -19,5 +19,8 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.53.0",
     "vitest": "4.1.0"
+  },
+  "dependencies": {
+    "@recallai/desktop-sdk": "2.0.36"
   }
 }

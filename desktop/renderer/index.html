@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KaniorAI Capture</title>
+    <title>Verelo Capture</title>
     <style>
       body {
         background: #f4f7fb;
@@ -17,16 +17,465 @@
         max-width: 42rem;
         padding: 2rem;
       }
+      button {
+        margin: 0.25rem;
+        padding: 0.6rem 0.9rem;
+      }
+      output {
+        display: block;
+        margin-top: 1rem;
+        white-space: pre-wrap;
+      }
+      .history-status {
+        display: block;
+        color: #526173;
+        font-size: 0.9rem;
+      }
+      #history li {
+        border-bottom: 1px solid #dce3ed;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.75rem;
+      }
+      #history button {
+        margin-left: 0;
+      }
     </style>
   </head>
   <body>
     <main>
-      <p>KaniorAI Capture</p>
-      <h1>Desktop foundation ready</h1>
+      <p>Verelo Capture</p>
+      <h1>Meeting audio capture</h1>
+      <p id="mode">Checking connection…</p>
+      <section id="sign-in">
+        <button id="open-login">Sign in to Verelo</button>
+        <button id="check-login">Continue after signing in</button>
+        <div id="magic-link-controls">
+          <p>
+            For local magic-link sign-in, open the sign-in link from the
+            development mailbox in this window:
+          </p>
+          <input
+            id="sign-in-link"
+            type="url"
+            placeholder="Paste your Verelo sign-in link"
+            style="width: 75%"
+          />
+          <button id="finish-login">Use sign-in link</button>
+        </div>
+      </section>
+      <section id="meeting-picker" hidden>
+        <form id="create-project" hidden>
+          <label
+            >New project
+            <input
+              id="project-name"
+              required
+              maxlength="200"
+              placeholder="Project name"
+          /></label>
+          <button>Create project</button>
+        </form>
+        <label
+          >Project
+          <select id="projects"></select
+        ></label>
+        <label
+          >Meeting
+          <select id="meetings"></select
+        ></label>
+        <button id="select-meeting">Use meeting</button>
+        <form id="create-meeting">
+          <input id="meeting-title" required placeholder="New meeting title" />
+          <label
+            ><input id="meeting-consent" type="checkbox" required /> I confirm
+            everyone required to consent has agreed to this recording.</label
+          >
+          <button>Create and select meeting</button>
+        </form>
+        <button id="sign-out">Sign out</button>
+      </section>
       <p>
-        Recall capture integration is intentionally deferred until its
-        feasibility gate is complete.
+        Choose a meeting before recording. For local capture, select a screen or
+        window with audio.
       </p>
+      <div id="capture-controls" aria-label="Capture controls" hidden>
+        <button id="start">Start recording</button>
+        <button id="pause">Pause</button>
+        <button id="resume">Resume</button>
+        <button id="stop">Stop and process</button>
+        <button data-action="interrupt">Mark interruption</button>
+        <button data-action="recover">Resume after interruption</button>
+      </div>
+      <output id="status" aria-live="polite">Loading capture state…</output>
+      <p id="processing" role="status"></p>
+      <section id="history-section" hidden>
+        <h2>Recording history</h2>
+        <ul id="history"></ul>
+      </section>
     </main>
+    <script>
+      const status = document.querySelector("#status");
+      const processing = document.querySelector("#processing");
+      const historySection = document.querySelector("#history-section");
+      const history = document.querySelector("#history");
+      const mode = document.querySelector("#mode");
+      const signIn = document.querySelector("#sign-in");
+      const picker = document.querySelector("#meeting-picker");
+      const controls = document.querySelector("#capture-controls");
+      const projects = document.querySelector("#projects");
+      const meetings = document.querySelector("#meetings");
+      const createProject = document.querySelector("#create-project");
+      const createMeeting = document.querySelector("#create-meeting");
+      let recorder;
+      let displayStream;
+      let microphoneStream;
+      let audioContext;
+      let startedAt = 0;
+      let captureAdapter = "synthetic";
+      let recordingActive = false;
+      let uploadQueue = Promise.resolve();
+      const show = (value) => {
+        status.textContent = JSON.stringify(value, null, 2);
+      };
+      const toBase64 = async (blob) => {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = "";
+        for (const value of bytes) binary += String.fromCharCode(value);
+        return btoa(binary);
+      };
+      const showError = (error) => {
+        status.textContent =
+          error instanceof Error ? error.message : "Request failed";
+      };
+      const setSelectedMeeting = async (documentId) => {
+        const document = await window.vereloDesktop.meetings.select(documentId);
+        controls.hidden = false;
+        historySection.hidden = false;
+        mode.textContent = `Ready to record: ${document.title}`;
+        await refreshHistory();
+      };
+      const refreshHistory = async () => {
+        const items = await window.vereloDesktop.meetings.history();
+        history.replaceChildren(
+          ...items.map((item) => {
+            const row = document.createElement("li");
+            const title = document.createElement("strong");
+            title.textContent = `${item.source_kind === "audio" ? "Audio recording" : "Transcript upload"} · ${new Date(item.created_at).toLocaleString()}`;
+            const progress = document.createElement("span");
+            progress.className = "history-status";
+            const names = {
+              source_pending: "Uploading source",
+              quarantined: "Checking source",
+              source_accepted: "Audio stored in Verelo",
+              transcription_queued: "Waiting for transcription",
+              transcription_submitted: "Transcription submitted",
+              transcription_processing: "Transcription processing",
+              raw_transcript_stored: "Preparing transcript",
+              draft_ready: "Transcript ready for review",
+              approval_required: "Transcript ready for review",
+              approved: "Approved",
+              publishing: "Publishing",
+              published: "Published",
+              failed_retryable: "Processing failed · retry available",
+              failed_terminal: "Processing failed · contact administrator",
+              aborted: "Processing stopped",
+            };
+            progress.textContent =
+              names[item.state] || item.state.replaceAll("_", " ");
+            row.append(title, progress);
+            if (item.safe_error_code) {
+              const issue = document.createElement("span");
+              issue.className = "history-status";
+              issue.textContent = `Issue: ${item.safe_error_code.replaceAll("_", " ")}`;
+              row.append(issue);
+            }
+            if (item.can_retry) {
+              const retry = document.createElement("button");
+              retry.textContent = "Retry processing";
+              retry.addEventListener("click", async () => {
+                retry.disabled = true;
+                try {
+                  await window.vereloDesktop.meetings.retry(item.ingestion_id);
+                  await refreshHistory();
+                } catch (error) {
+                  showError(error);
+                  retry.disabled = false;
+                }
+              });
+              row.append(retry);
+            }
+            return row;
+          }),
+        );
+      };
+      const refreshMeetings = async () => {
+        await window.vereloDesktop.meetings.clear();
+        controls.hidden = true;
+        historySection.hidden = true;
+        createMeeting.querySelectorAll("input,button").forEach((item) => {
+          item.disabled = !projects.value;
+        });
+        if (!projects.value) {
+          meetings.replaceChildren();
+          document.querySelector("#select-meeting").disabled = true;
+          return;
+        }
+        const items = await window.vereloDesktop.meetings.list(projects.value);
+        meetings.replaceChildren(
+          ...items.map((item) => new Option(item.title, item.document_id)),
+        );
+        document.querySelector("#select-meeting").disabled = items.length === 0;
+      };
+      const setRecordingActive = (active) => {
+        recordingActive = active;
+        projects.disabled = active;
+        meetings.disabled = active;
+        createProject.querySelectorAll("input,button").forEach((item) => {
+          item.disabled = active;
+        });
+        createMeeting.querySelectorAll("input,button").forEach((item) => {
+          item.disabled = active;
+        });
+        document.querySelector("#select-meeting").disabled =
+          active || !meetings.value;
+        document.querySelector("#sign-out").disabled = active;
+        document.querySelector("#start").disabled = active;
+      };
+      const refreshAuth = async () => {
+        const identity = await window.vereloDesktop.auth.status();
+        signIn.hidden = identity.signedIn;
+        picker.hidden = !identity.signedIn;
+        controls.hidden = true;
+        historySection.hidden = true;
+        if (!identity.signedIn) {
+          createProject.hidden = true;
+          mode.textContent = "Sign in to select a meeting.";
+          return;
+        }
+        createProject.hidden = !identity.canCreateProject;
+        mode.textContent = `Signed in as ${identity.displayName}. Select a meeting.`;
+        const items = await window.vereloDesktop.meetings.projects();
+        const writable = items.filter((item) => item.my_role !== "reader");
+        projects.replaceChildren(
+          ...writable.map((item) => new Option(item.name, item.project_id)),
+        );
+        await refreshMeetings();
+        if (!writable.length)
+          mode.textContent = identity.canCreateProject
+            ? "Create a project below, then create or select a meeting."
+            : "Ask a project owner for access to a writable project.";
+      };
+      window.vereloDesktop.auth.onExpired(() => {
+        refreshAuth().catch(showError);
+      });
+      window.vereloDesktop.auth.onSignedIn(() => {
+        refreshAuth().catch(showError);
+      });
+      window.vereloDesktop.auth
+        .mode()
+        .then((value) => {
+          document.querySelector("#magic-link-controls").hidden =
+            value.provider === "entra";
+        })
+        .catch(showError);
+      document.querySelector("#open-login").addEventListener("click", () => {
+        window.vereloDesktop.auth.open().catch(showError);
+      });
+      document.querySelector("#check-login").addEventListener("click", () => {
+        refreshAuth().catch(showError);
+      });
+      document
+        .querySelector("#finish-login")
+        .addEventListener("click", async () => {
+          try {
+            await window.vereloDesktop.auth.complete(
+              document.querySelector("#sign-in-link").value,
+            );
+            await refreshAuth();
+          } catch (error) {
+            showError(error);
+          }
+        });
+      document
+        .querySelector("#sign-out")
+        .addEventListener("click", async () => {
+          try {
+            await window.vereloDesktop.auth.logout();
+            await refreshAuth();
+          } catch (error) {
+            showError(error);
+          }
+        });
+      projects.addEventListener("change", () =>
+        refreshMeetings().catch(showError),
+      );
+      meetings.addEventListener("change", () => {
+        controls.hidden = true;
+        historySection.hidden = true;
+        window.vereloDesktop.meetings.clear().catch(showError);
+      });
+      createProject.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const project = await window.vereloDesktop.meetings.createProject(
+            document.querySelector("#project-name").value,
+          );
+          const items = await window.vereloDesktop.meetings.projects();
+          const writable = items.filter((item) => item.my_role !== "reader");
+          projects.replaceChildren(
+            ...writable.map((item) => new Option(item.name, item.project_id)),
+          );
+          projects.value = project.project_id;
+          await refreshMeetings();
+          document.querySelector("#project-name").value = "";
+          mode.textContent = `Project ${project.name} is ready. Create a meeting below.`;
+        } catch (error) {
+          showError(error);
+        }
+      });
+      document
+        .querySelector("#select-meeting")
+        .addEventListener("click", () => {
+          setSelectedMeeting(meetings.value).catch(showError);
+        });
+      createMeeting.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          const item = await window.vereloDesktop.meetings.create(
+            projects.value,
+            document.querySelector("#meeting-title").value,
+          );
+          await refreshMeetings();
+          meetings.value = item.document_id;
+          await setSelectedMeeting(item.document_id);
+          document.querySelector("#meeting-title").value = "";
+          document.querySelector("#meeting-consent").checked = false;
+        } catch (error) {
+          showError(error);
+        }
+      });
+      window.vereloDesktop.capture.mode().then((value) => {
+        captureAdapter = value.adapter;
+      });
+      refreshAuth().catch(showError);
+      const refreshProgress = async () => {
+        const value = await window.vereloDesktop.capture.progress();
+        processing.textContent = value
+          ? `Processing: ${value.state.replaceAll("_", " ")} · ${value.stage.replaceAll("_", " ")}${value.safeErrorCode ? ` · issue: ${value.safeErrorCode.replaceAll("_", " ")}` : ""}`
+          : "";
+      };
+      window.setInterval(() => refreshProgress().catch(() => undefined), 5000);
+      window.setInterval(() => {
+        if (!historySection.hidden) refreshHistory().catch(() => undefined);
+      }, 5000);
+      document.querySelector("#start").addEventListener("click", async () => {
+        try {
+          show(await window.vereloDesktop.capture.create());
+          if (captureAdapter === "recall_desktop") {
+            startedAt = Date.now();
+            show(await window.vereloDesktop.capture.dispatch("start", 0));
+            setRecordingActive(true);
+            return;
+          }
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true,
+          });
+          microphoneStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          if (displayStream.getAudioTracks().length === 0) {
+            throw new Error("selected_source_has_no_audio");
+          }
+          audioContext = new AudioContext();
+          const destination = audioContext.createMediaStreamDestination();
+          audioContext
+            .createMediaStreamSource(displayStream)
+            .connect(destination);
+          audioContext
+            .createMediaStreamSource(microphoneStream)
+            .connect(destination);
+          recorder = new MediaRecorder(destination.stream, {
+            mimeType: "audio/webm",
+          });
+          recorder.addEventListener("dataavailable", (event) => {
+            if (event.data.size === 0) return;
+            uploadQueue = uploadQueue.then(async () => {
+              const encoded = await toBase64(event.data);
+              show(await window.vereloDesktop.capture.uploadChunk(encoded));
+            });
+          });
+          recorder.start(3000);
+          startedAt = Date.now();
+          show(await window.vereloDesktop.capture.dispatch("start", 0));
+          setRecordingActive(true);
+        } catch (error) {
+          status.textContent = `Capture could not start: ${error instanceof Error ? error.message : "unknown error"}`;
+        }
+      });
+      document.querySelector("#pause").addEventListener("click", async () => {
+        recorder?.pause();
+        show(
+          await window.vereloDesktop.capture.dispatch(
+            "pause",
+            Date.now() - startedAt,
+          ),
+        );
+      });
+      document.querySelector("#resume").addEventListener("click", async () => {
+        recorder?.resume();
+        show(
+          await window.vereloDesktop.capture.dispatch(
+            "resume",
+            Date.now() - startedAt,
+          ),
+        );
+      });
+      document.querySelector("#stop").addEventListener("click", async () => {
+        try {
+          const duration = Math.max(0, Date.now() - startedAt);
+          if (captureAdapter === "recall_desktop") {
+            show(await window.vereloDesktop.capture.dispatch("stop", duration));
+            setRecordingActive(false);
+            status.textContent =
+              "Recall upload is finishing. Verelo will copy the audio to private storage, then queue transcription. This can take several minutes; see recording history for updates.";
+            void refreshProgress();
+            return;
+          }
+          if (!recorder) return;
+          const stopped = new Promise((resolve) =>
+            recorder.addEventListener("stop", resolve, { once: true }),
+          );
+          recorder.stop();
+          await stopped;
+          await uploadQueue;
+          show(await window.vereloDesktop.capture.dispatch("stop", duration));
+          show(await window.vereloDesktop.capture.finalize(duration));
+          setRecordingActive(false);
+          void refreshProgress();
+          displayStream?.getTracks().forEach((track) => track.stop());
+          microphoneStream?.getTracks().forEach((track) => track.stop());
+          await audioContext?.close();
+          recorder = undefined;
+        } catch (error) {
+          showError(error);
+        }
+      });
+      document.querySelectorAll("button[data-action]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          try {
+            show(
+              await window.vereloDesktop.capture.dispatch(
+                button.dataset.action,
+                Date.now(),
+              ),
+            );
+          } catch {
+            status.textContent =
+              "That transition is not valid from the current state.";
+          }
+        });
+      });
+    </script>
   </body>
 </html>

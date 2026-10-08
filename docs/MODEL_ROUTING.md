@@ -1,4 +1,4 @@
-# KaniorAI Model Routing Policy
+# Verelo Model Routing Policy
 
 ## Purpose
 
@@ -61,7 +61,7 @@ Escalate when substantial ambiguity or cross-system reasoning appears.
 
 ### Sol
 
-Sol is the default KaniorAI engineering model.
+Sol is the default Verelo engineering model.
 
 Use for:
 
@@ -77,7 +77,7 @@ Use for:
 - multi-file changes
 - unfamiliar code within a bounded module
 
-Most KaniorAI development work should occur here.
+Most Verelo development work should occur here.
 
 
 ### Astra

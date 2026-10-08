@@ -1,1 +1,1 @@
-export const desktopApplicationName = "KaniorAI Capture";
+export const desktopApplicationName = "Verelo Capture";

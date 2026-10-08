@@ -1,1 +1,1 @@
-"""HTTP application boundary for Kanior."""
+"""HTTP application boundary for Verelo."""

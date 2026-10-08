@@ -5,7 +5,7 @@ cd "$ROOT_DIR"
 
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '\n========================================\n'
-printf 'KaniorAI PR Readiness Gate\n'
+printf 'Verelo PR Readiness Gate\n'
 printf 'Started: %s\n' "$started_at"
 printf '========================================\n'
 

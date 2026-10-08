@@ -1,0 +1,20 @@
+title = "Verelo secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "B2 setting references in provider adapters are not embedded keys"
+  condition = "AND"
+  regexTarget = "line"
+  paths = [
+    '''^connectors/live_runtime\.py$''',
+    '''^scripts/(recall-r1-smoke|live-provider-smoke)\.py$''',
+  ]
+  regexes = [
+    '''^\s*secret_access_key=(?:_required|_secret|secret)\(settings\.b2_application_key, "(?:VERELO_B2_APPLICATION_KEY|b2_application_key)"\),?$''',
+    '''^\s*settings\.b2_purge_application_key, "b2_purge_application_key"$''',
+  ]

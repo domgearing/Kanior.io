@@ -28,7 +28,7 @@ This is a proposed architecture inspired by the retrieval-and-rendering pattern 
 
 **Ground truth is the approved transcript version plus its original-audio timestamp/provenance, when audio exists. “Verified quote” means exact equality to a contiguous span of that immutable, approved version.** Raw STT output and readable cleanup are separate retained artifacts. A model's cleaned output is not silently promoted to authority.
 
-Approval does not imply that someone listened to every word. To preserve the earlier decision to defer audio verification, the initial project policy may automatically approve only deterministic, allowlisted formatting changes under §8.5, recording `approval_method=controlled_cleanup_policy` and the policy version. Human wording corrections require an authorized approver. Projects can instead require manual approval for every version. Human audio review remains optional and is separately labeled; an audio timestamp enables inspection but does not prove speech accuracy.
+Approval does not imply that someone listened to every word. To preserve the earlier decision to defer audio verification, the project policy may automatically approve deterministic formatting changes and ADR-004's narrowly allowlisted filler-removal/stutter-deduplication transformations under §8.5, recording `approval_method=controlled_cleanup_policy`, the policy version, and the exact edit manifest. A model's semantic judgment alone cannot authorize an edit; all other wording corrections require an authorized human approver. Projects can instead require manual approval for every version. Human audio review remains optional and is separately labeled; an audio timestamp enables inspection but does not prove speech accuracy.
 
 Transcript-only imports can be approved with `audio_provenance=unavailable`; never invent timing. If source audio later expires under retention policy, retain the approved text's quote guarantee and show that replay is no longer available.
 
@@ -135,7 +135,7 @@ Use a modular monolith initially. A module boundary is a code and authorization 
 | Hosting | Budget profile: one small DigitalOcean VM for app, API, and worker | Managed alternative: Azure Container Apps with separate worker pools |
 | Database/search | PostgreSQL with full-text search and pgvector on the budget VM | Managed PostgreSQL when capacity/availability justify it |
 | Authoritative files | Private Backblaze B2 for originals, transcript versions, and independently protected backups | Private Azure Blob Storage is the managed deployment alternative |
-| Identity | Single-tenant Microsoft Entra ID; authorization-code flow with PKCE and server-side session | Same with managed employee lifecycle and access reviews |
+| Identity | Provider-neutral boundary; explicit-allowlist magic links in local/test; server-side session | Single-tenant Microsoft Entra ID authorization-code flow with PKCE and managed employee lifecycle/access reviews |
 | Meeting capture | Electron + Recall.ai Desktop Recording SDK | Same capture adapter with tested recovery and signed updates |
 | Speech recognition | AssemblyAI Universal-3.5 Pro post-meeting transcription, pinned `universal-3-5-pro`, with diarization | Same, plus versioned speaker reconciliation and human correction |
 | Transcript cleanup | Approved GPT adapter proposing narrowly permitted formatting edits; deterministic validation before publication | Same contract with versioned prompts and regression tests |
@@ -274,7 +274,7 @@ Use optimistic locking with `If-Match`/revision values. Conflicts return 409 wit
 
 | Module | Inputs | Outputs / responsibility |
 |---|---|---|
-| Identity/session | Entra authentication result | Server session, verified tenant and employee identity |
+| Identity/session | Configured provider proof (development magic link or production Entra) | Server session, verified tenant and enabled internal employee identity |
 | Authorization | User, action, project, optional transcript | Allow/deny; applied at API, database, jobs, live delivery, and rendering |
 | Capture/upload | Metadata and bounded binary chunks | Validated raw asset, manifest, durable acknowledgements |
 | Import parser | Raw text/VTT/SRT/JSON bytes | Canonical text plus provenance and optional timing; parser version |
@@ -607,7 +607,7 @@ An Azure-hosted GPT deployment is a separate connector with its own contractual 
 
 ### 12.1 Authentication and authorization
 
-Use a single-tenant Entra application, validate issuer/audience/signature/expiry/nonce, and require the firm's tenant ID. Tenant membership alone is insufficient: guests can belong to the tenant. Require enabled employee membership in an assigned enterprise application/group and an app user record. Email-domain matching is only an additional check; email is not the stable identity key. Use tenant ID plus Entra object ID. Single-tenant application behavior is documented by [Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity-platform/single-and-multi-tenant-apps).
+Use a provider-neutral identity boundary. ADR-005 permits explicit-allowlist, single-use magic links only for local/test scaffold development; email is a mutable locator and never a stable identity or domain-based authorization rule. Confidential/staging/production uses a single-tenant Entra application: validate issuer/audience/signature/expiry/nonce and require the firm's tenant ID. Tenant membership alone is insufficient; require enabled employee assignment and an internal app user record. Use tenant ID plus Entra object ID. Single-tenant application behavior is documented by [Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity-platform/single-and-multi-tenant-apps).
 
 Require MFA through tenant policy. Idle session timeout is 30 minutes with an 8-hour absolute lifetime as an initial app default. Long recordings must warn and renew authentication before expiry; they do not bypass disabled-user checks. Recheck app authorization on every request. Employee deprovisioning must update the app allowlist promptly, target ≤5 minutes end to end, and have an emergency immediate-disable control.
 
@@ -621,7 +621,7 @@ Require MFA through tenant policy. Idle session timeout is 30 minutes with an 8-
 
 Production adds an explicit export capability and transcript restrictions. Effective transcript access is project membership intersected with transcript grants/restrictions; a transcript grant cannot admit someone outside the project. Services use action-specific identities. Administrative break-glass content access requires a time-limited assignment and durable audit.
 
-Project owners may approve or revoke transcript versions; an explicit reviewer capability may delegate that permission. Contributors may propose corrections but cannot approve wording changes by themselves unless separately granted reviewer capability. The controlled-cleanup service may approve only unchanged text or validated edits under a recorded project policy; it cannot approve arbitrary human/model rewrites. Approval authorization is independent of permission to read audio or to claim audio review.
+Project owners may approve or revoke transcript versions; an explicit reviewer capability may delegate that permission. Contributors may propose corrections but cannot approve wording changes by themselves unless separately granted reviewer capability. The controlled-cleanup service may approve only unchanged text or exact edits accepted by the recorded deterministic project policy, including ADR-004's narrow versioned rules; it cannot approve arbitrary human/model rewrites or expand the allowlist through semantic scoring. Approval authorization is independent of permission to read audio or to claim audio review.
 
 ### 12.2 Database and object isolation
 
@@ -810,7 +810,7 @@ These decisions do not prevent implementation with synthetic data. They prevent 
 | Recording environment | Recall Desktop SDK in managed Electron app; test actual meeting clients, operating systems, metadata, and interruptions | Product owner |
 | Retention and holds | Confirm or replace §14 pilot defaults and backup-erasure limits | Data owner / compliance |
 | Consent policy | Firm-provided acknowledgement text and operating procedure | Data owner |
-| Ground-truth policy | Approved immutable transcript version plus original audio provenance; explicit controlled-cleanup approval initially, human approval for wording corrections; audio review optional | Product owner — specified |
+| Ground-truth policy | Approved immutable transcript version plus original audio provenance; deterministic ADR-004 controlled cleanup may be auto-approved, all other wording corrections require human approval; audio review optional | Product owner — specified |
 | Capacity and budget | Confirm §2 load envelope, providers' quota, and monthly spend ceiling | Engineering / finance |
 | Recovery targets | Confirm RPO/RTO and permitted backup region | IT / data owner |
 

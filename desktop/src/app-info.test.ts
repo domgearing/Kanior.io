@@ -4,6 +4,6 @@ import { desktopApplicationName } from "./app-info";
 
 describe("desktopApplicationName", () => {
   it("identifies the capture client", () => {
-    expect(desktopApplicationName).toBe("KaniorAI Capture");
+    expect(desktopApplicationName).toBe("Verelo Capture");
   });
 });

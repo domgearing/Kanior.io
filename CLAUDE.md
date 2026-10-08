@@ -3,7 +3,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Kanior.io** (56170 symbols, 176209 relationships, 689 execution flows).
+This project is indexed by GitNexus as **verelo.io** (56170 symbols, 176209 relationships, 689 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
@@ -27,10 +27,10 @@ This project is indexed by GitNexus as **Kanior.io** (56170 symbols, 176209 rela
 
 | Resource | Use for |
 | --- | --- |
-| `gitnexus://repo/Kanior.io/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Kanior.io/clusters` | All functional areas |
-| `gitnexus://repo/Kanior.io/processes` | All execution flows |
-| `gitnexus://repo/Kanior.io/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/verelo.io/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/verelo.io/clusters` | All functional areas |
+| `gitnexus://repo/verelo.io/processes` | All execution flows |
+| `gitnexus://repo/verelo.io/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

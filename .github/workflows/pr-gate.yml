@@ -54,17 +54,23 @@ jobs:
         image: pgvector/pgvector:0.8.1-pg17
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: kanior_pr_gate
+          POSTGRES_DB: verelo_pr_gate
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d kanior_pr_gate"
+          --health-cmd "pg_isready -U postgres -d verelo_pr_gate"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/kanior_pr_gate
-      PR_GATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/kanior_pr_gate
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/verelo_pr_gate
+      PR_GATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/verelo_pr_gate
+      VERELO_MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/verelo_pr_gate
+      VERELO_TEST_ADMIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/verelo_pr_gate
+      VERELO_DATABASE_URL: postgresql+psycopg://verelo_api:verelo_api@127.0.0.1:5432/verelo_pr_gate
+      VERELO_TEST_WORKER_DATABASE_URL: postgresql+psycopg://verelo_worker:verelo_worker@127.0.0.1:5432/verelo_pr_gate
+      VERELO_ENVIRONMENT: test
+      VERELO_INTEGRATIONS_MODE: fake
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -83,11 +89,11 @@ jobs:
       - name: Install project dependencies
         run: bash ./scripts/setup-ci.sh
 
-      - name: Integration tests
-        run: bash ./scripts/test-integration.sh
-
       - name: Validate migrations against clean PostgreSQL
         run: bash ./scripts/check-migrations.sh
+
+      - name: Integration tests
+        run: bash ./scripts/test-integration.sh
 
   evals:
     name: PR Evals

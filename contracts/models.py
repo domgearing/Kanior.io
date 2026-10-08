@@ -26,6 +26,7 @@ NonNegative = Annotated[StrictInt, Field(ge=0)]
 Positive = Annotated[StrictInt, Field(ge=1)]
 RequestId = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 Role = Literal["reader", "contributor", "project_owner"]
+EmailAddress = Annotated[str, StringConstraints(min_length=3, max_length=320)]
 
 
 class Contract(BaseModel):
@@ -66,8 +67,49 @@ class MeResponse(Contract):
     tenant_id: UUID
     workspace_id: UUID
     display_name: Name
+    email: EmailAddress
     capabilities: list[Literal["projects:create"]]
     csrf_token: Annotated[str, StringConstraints(min_length=32, max_length=256)]
+
+
+class ProfileUpdate(Contract):
+    display_name: Name
+
+
+class MagicLinkRequest(Contract):
+    email: EmailAddress
+
+    @field_validator("email")
+    @classmethod
+    def plausible_email(cls, value: str) -> str:
+        candidate = value.strip()
+        if candidate.count("@") != 1 or any(character.isspace() for character in candidate):
+            raise ValueError("invalid email address")
+        local, domain = candidate.rsplit("@", 1)
+        if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("invalid email address")
+        return candidate
+
+
+class MagicLinkRequestAccepted(Contract):
+    status: Literal["accepted"]
+    message: Literal["If the account is eligible, a sign-in link will be sent."]
+
+
+class MagicLinkConsume(Contract):
+    token: Annotated[str, StringConstraints(min_length=32, max_length=256)]
+
+
+class AuthenticationResult(Contract):
+    status: Literal["authenticated"]
+
+
+class AuthenticationMode(Contract):
+    provider: Literal["magic_link", "entra"]
+
+
+class LogoutResult(Contract):
+    status: Literal["signed_out"]
 
 
 class ProjectCreate(Contract):
@@ -80,6 +122,7 @@ class Project(Contract):
     workspace_id: UUID
     name: Name
     owner_user_id: UUID
+    my_role: Role
     authorization_epoch: NonNegative
     state: Literal["active"]
     created_at: AwareDatetime
@@ -104,12 +147,45 @@ class Membership(Contract):
     project_authorization_epoch: NonNegative
 
 
+class MemberSummary(Contract):
+    user_id: UUID
+    display_name: Name
+    email: EmailAddress
+    role: Role
+    enabled: bool
+    revision: Positive
+
+
+class MemberPage(Contract):
+    items: Annotated[list[MemberSummary], Field(max_length=100)]
+
+
+class MembershipByEmailPut(Contract):
+    email: EmailAddress
+    role: Role
+    enabled: bool = True
+    expected_revision: NonNegative = 0
+
+    @field_validator("email")
+    @classmethod
+    def plausible_email(cls, value: str) -> str:
+        return MagicLinkRequest.plausible_email(value)
+
+
 class DocumentCreate(Contract):
     title: Title
     meeting_date: AwareDatetime
     language: Language
     consent_acknowledged: Literal[True]
     consent_policy_version: PolicyVersion
+
+    @field_validator("meeting_date", mode="before")
+    @classmethod
+    def parse_json_datetime(cls, value: object) -> object:
+        """Accept the RFC 3339 representation JSON necessarily uses for datetimes."""
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return value
 
     @field_validator("consent_acknowledged", mode="before")
     @classmethod
@@ -198,6 +274,240 @@ class TranscriptImport(Contract):
         if type(value) is not int:
             raise ValueError("schema_version must be an integer")
         return value
+
+
+Sha256Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+OperationKey = Annotated[str, StringConstraints(min_length=16, max_length=200, pattern=r"\S")]
+IngestionState = Literal[
+    "source_pending",
+    "quarantined",
+    "source_accepted",
+    "transcription_queued",
+    "transcription_submitted",
+    "transcription_processing",
+    "raw_transcript_stored",
+    "draft_ready",
+    "approval_required",
+    "approved",
+    "publishing",
+    "published",
+    "failed_retryable",
+    "failed_terminal",
+    "aborted",
+]
+IngestionStage = Literal[
+    "upload", "quarantine", "transcription", "cleanup", "approval", "publication"
+]
+
+
+class IngestionCreate(Contract):
+    source_kind: Literal["audio", "transcript"]
+    filename: Annotated[str, StringConstraints(min_length=1, max_length=500, pattern=r"\S")]
+    declared_media_type: Literal[
+        "audio/wav",
+        "audio/mpeg",
+        "audio/mp4",
+        "audio/webm",
+        "text/plain",
+        "text/vtt",
+        "application/x-subrip",
+        "application/json",
+    ]
+    byte_length: Positive
+    sha256: Sha256Digest
+    operation_key: OperationKey
+
+    @model_validator(mode="after")
+    def matching_kind(self) -> "IngestionCreate":
+        is_audio = self.declared_media_type.startswith("audio/")
+        if (self.source_kind == "audio") != is_audio:
+            raise ValueError("source kind and media type do not match")
+        limit = 2 * 1024 * 1024 * 1024 if is_audio else 20 * 1024 * 1024
+        if self.byte_length > limit:
+            raise ValueError("source exceeds size limit")
+        return self
+
+
+class IngestionChunkPut(Contract):
+    sequence: Positive
+    content_base64: Annotated[str, StringConstraints(min_length=1, max_length=7_000_000)]
+    sha256: Sha256Digest
+
+
+class IngestionFinalize(Contract):
+    operation_key: OperationKey
+    expected_byte_length: Positive
+    expected_sha256: Sha256Digest
+
+
+class Ingestion(Contract):
+    ingestion_id: UUID
+    document_id: UUID
+    source_asset_id: UUID | None = None
+    source_kind: Literal["audio", "transcript"]
+    state: IngestionState
+    stage: IngestionStage
+    uploaded_bytes: NonNegative
+    expected_bytes: Positive
+    acknowledged_chunks: NonNegative
+    gap_count: NonNegative
+    retryable: bool
+    safe_error_code: str | None = None
+    draft_revision: Positive | None = None
+    draft_sha256: Sha256Digest | None = None
+    transcript_version_id: UUID | None = None
+    can_upload: bool
+    can_retry: bool
+    can_abort: bool
+    can_review: bool
+    can_approve: bool
+    can_publish: bool
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+
+
+class IngestionPage(Contract):
+    items: Annotated[list[Ingestion], Field(max_length=100)]
+
+
+class CleanupEditManifest(Contract):
+    rule: Literal["filler_removal", "stutter_deduplication"]
+    start_character: NonNegative
+    end_character: NonNegative
+
+
+class DraftApproval(Contract):
+    approval_id: UUID
+    method: Literal["controlled_cleanup_policy", "person"]
+    content_sha256: Sha256Digest
+    approved_at: AwareDatetime
+
+
+class TranscriptDraft(Contract):
+    ingestion_id: UUID
+    document_id: UUID
+    draft_id: UUID
+    revision: Positive
+    source_sha256: Sha256Digest
+    content_sha256: Sha256Digest
+    canonical_text: str
+    segments: list[TranscriptSegment]
+    cleanup_policy_version: PolicyVersion
+    cleanup_status: Literal["unchanged", "accepted", "approval_required", "human_corrected"]
+    edit_manifest: list[CleanupEditManifest]
+    approval: DraftApproval | None = None
+
+
+class CorrectedDraftPut(Contract):
+    canonical_text: Annotated[str, StringConstraints(min_length=1, max_length=20_000_000)]
+    expected_revision: Positive
+    expected_content_sha256: Sha256Digest
+    reason_code: Literal[
+        "transcription_correction", "speaker_correction", "formatting_correction", "other_reviewed"
+    ]
+
+
+class TranscriptApprovalCreate(Contract):
+    content_sha256: Sha256Digest
+    expected_revision: Positive
+    reason_code: Literal["reviewed_transcript", "reviewed_with_audio", "approved_correction"]
+
+
+class TranscriptPublicationCreate(Contract):
+    approved_content_sha256: Sha256Digest
+    expected_draft_revision: Positive
+    expected_active_transcript_version_id: UUID | None = None
+    operation_key: OperationKey
+
+
+class IngestionAction(Contract):
+    operation_key: OperationKey
+
+
+class TranscriptDownload(Contract):
+    format: Literal["txt", "md", "json"]
+    filename: Annotated[str, StringConstraints(min_length=1, max_length=520)]
+    media_type: Literal[
+        "text/plain; charset=utf-8", "text/markdown; charset=utf-8", "application/json"
+    ]
+    content_base64: str
+    sha256: Sha256Digest
+
+
+class SourceAssetContent(Contract):
+    source_asset_id: UUID
+    media_type: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    byte_length: Positive
+    sha256: Sha256Digest
+    content_base64: str
+
+
+class TranscriptPublication(Contract):
+    transcript_version_id: UUID
+    document_id: UUID
+    source_asset_id: UUID
+    content_sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    state: Literal["published"]
+    approval_method: Literal["controlled_cleanup_policy", "person"]
+    passage_count: NonNegative
+    index_job_count: NonNegative
+    canonical_text: str
+    reproduced_sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+
+class CaptureCreate(Contract):
+    document_id: UUID
+
+    @field_validator("document_id", mode="before")
+    @classmethod
+    def parse_json_uuid(cls, value: object) -> object:
+        if isinstance(value, str):
+            return UUID(value)
+        return value
+
+
+class CaptureGap(Contract):
+    start_ms: NonNegative
+    end_ms: NonNegative | None
+    reason: Annotated[str, StringConstraints(min_length=1, max_length=100)]
+
+
+class CaptureSession(Contract):
+    capture_session_id: UUID
+    document_id: UUID
+    state: Literal[
+        "created",
+        "recording",
+        "paused",
+        "interrupted",
+        "finalizing",
+        "uploading",
+        "complete",
+        "failed",
+        "aborted",
+    ]
+    acknowledged_chunks: NonNegative
+    gaps: list[CaptureGap]
+    source_asset_id: UUID | None = None
+    ingestion_id: UUID | None = None
+
+
+class CaptureTransition(Contract):
+    event: Literal["start", "pause", "resume", "interrupt", "recover", "stop", "upload", "fail"]
+    at_ms: NonNegative = 0
+    reason: Annotated[str, StringConstraints(min_length=1, max_length=100)] = "device_interruption"
+
+
+class CaptureChunkUpload(Contract):
+    sequence: Positive
+    content_base64: Annotated[str, StringConstraints(min_length=1, max_length=7_000_000)]
+    sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+
+class CaptureFinalize(Contract):
+    filename: Annotated[str, StringConstraints(min_length=1, max_length=500, pattern=r"\S")]
+    detected_mime: Literal["audio/wav", "audio/mpeg", "audio/mp4", "audio/webm"] = "audio/wav"
+    duration_ms: NonNegative
 
 
 class EvidenceSelection(Contract):
@@ -298,15 +608,43 @@ class TranscriptPublishedEvent(EventBase):
 
 PUBLIC_MODELS = [
     Error,
+    MagicLinkRequest,
+    MagicLinkRequestAccepted,
+    MagicLinkConsume,
+    AuthenticationResult,
+    AuthenticationMode,
+    LogoutResult,
     MeResponse,
+    ProfileUpdate,
     ProjectCreate,
     Project,
     MembershipPut,
     Membership,
+    MemberSummary,
+    MemberPage,
+    MembershipByEmailPut,
     DocumentCreate,
     Document,
     ProjectPage,
     DocumentPage,
+    TranscriptPublication,
+    IngestionCreate,
+    IngestionChunkPut,
+    IngestionFinalize,
+    Ingestion,
+    IngestionPage,
+    TranscriptDraft,
+    CorrectedDraftPut,
+    TranscriptApprovalCreate,
+    TranscriptPublicationCreate,
+    IngestionAction,
+    TranscriptDownload,
+    SourceAssetContent,
+    CaptureCreate,
+    CaptureSession,
+    CaptureTransition,
+    CaptureChunkUpload,
+    CaptureFinalize,
 ]
 RESERVED_MODELS = [
     TranscriptImport,

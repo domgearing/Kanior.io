@@ -1,21 +1,22 @@
 {
-  "name": "kanior-ai",
+  "name": "verelo",
   "version": "0.1.0",
   "private": true,
-  "description": "KaniorAI transcript intelligence platform workspace",
+  "description": "Verelo transcript intelligence platform workspace",
   "packageManager": "pnpm@12.4.2",
   "engines": {
     "node": ">=24.0.0",
     "pnpm": ">=12.4.2"
   },
   "scripts": {
-    "dev:web": "corepack pnpm --filter @kanior/web dev",
-    "dev:desktop": "corepack pnpm --filter @kanior/desktop dev",
+    "dev:web": "corepack pnpm --filter @verelo/web dev",
+    "dev:desktop": "corepack pnpm --filter @verelo/desktop dev",
+    "dev:live-test": "bash scripts/live-test-run.sh",
     "format:check": "prettier --check --ignore-unknown package.json pnpm-workspace.yaml web desktop",
-    "lint": "corepack pnpm --filter @kanior/web lint && corepack pnpm --filter @kanior/desktop lint",
-    "typecheck": "corepack pnpm --filter @kanior/web typecheck && corepack pnpm --filter @kanior/desktop typecheck",
-    "test": "corepack pnpm --filter @kanior/web test && corepack pnpm --filter @kanior/desktop test",
-    "build": "corepack pnpm --filter @kanior/web build && corepack pnpm --filter @kanior/desktop build"
+    "lint": "corepack pnpm --filter @verelo/web lint && corepack pnpm --filter @verelo/desktop lint",
+    "typecheck": "corepack pnpm --filter @verelo/web typecheck && corepack pnpm --filter @verelo/desktop typecheck",
+    "test": "corepack pnpm --filter @verelo/web test && corepack pnpm --filter @verelo/desktop test",
+    "build": "corepack pnpm --filter @verelo/web build && corepack pnpm --filter @verelo/desktop build"
   },
   "devDependencies": {
     "prettier": "3.7.4"

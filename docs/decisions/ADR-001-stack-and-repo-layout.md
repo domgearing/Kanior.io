@@ -4,7 +4,7 @@ Status: accepted.
 
 ## Context
 
-KaniorAI needs a small initial implementation that preserves strict authorization and source-integrity boundaries while supporting a web client, managed desktop capture, an HTTP API, background work, relational data, and vector search. Future agents need one repository layout and one toolchain path. Supporting multiple equivalent stacks or queues would create drift before product behavior exists.
+Verelo needs a small initial implementation that preserves strict authorization and source-integrity boundaries while supporting a web client, managed desktop capture, an HTTP API, background work, relational data, and vector search. Future agents need one repository layout and one toolchain path. Supporting multiple equivalent stacks or queues would create drift before product behavior exists.
 
 ## Decision
 

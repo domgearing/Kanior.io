@@ -15,7 +15,7 @@ threshold = 1.0
 blocking = true
 
 # Add product evals here when the protected behavior first exists.
-# Examples to activate as KaniorAI is implemented:
+# Examples to activate as Verelo is implemented:
 #
 # [evals.quote_fidelity]
 # description = "Rendered verified quotes exactly match canonical source spans."

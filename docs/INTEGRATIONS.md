@@ -2,6 +2,9 @@
 
 Authority: `ARCHITECTURE.md` §§4, 7, 17, 19–22, 38–39 and `PROJECT_SPEC.md` §§4, 6, 11–14. Internal contracts remain in [API_CONTRACTS.md](API_CONTRACTS.md), [DATA_MODEL.md](DATA_MODEL.md), and [SECURITY.md](SECURITY.md).
 
+For the operator-facing sequence, credential placement, portal setup, and activation checklist, see
+[Full MVP provider setup and activation](FULL_MVP_PROVIDER_SETUP.md).
+
 Documentation verified: **2026-09-16**. Verification means the cited official pages were read; it does not establish tenant access, account settings, installed SDK compatibility or a successful live integration. **No live provider tests have been run for this reference.** No connector, fake implementation, credentials or deployed configuration is added by these documents.
 
 ## Provider index and readiness
@@ -9,6 +12,7 @@ Documentation verified: **2026-09-16**. Verification means the cited official pa
 | Guide | Selected protocol / model | Open prerequisite |
 |---|---|---|
 | [Microsoft Entra](integrations/microsoft-entra.md) | OIDC/OAuth 2.0, tenant-specific v2.0 endpoints | Test tenant, assigned employees, lifecycle provisioning, client library pin |
+| [Microsoft Graph Mail](integrations/microsoft-graph-mail.md) | Graph `v1.0` `sendMail`, application identity | Dedicated sender mailbox, admin consent and mailbox-scoped Exchange application RBAC |
 | [Recall](integrations/recall.md) | Desktop SDK + REST `/api/v1`; audio-only capture | **R1 audio handoff feasibility gate**, exact SDK/Electron/OS pins |
 | [AssemblyAI](integrations/assemblyai.md) | REST `/v2`, `universal-3-5-pro` | Regional account/model access, training opt-out and retention evidence |
 | [OpenAI](integrations/openai.md) | REST `/v1/responses` and `/v1/embeddings` | Approved model identifiers, dimensions, account data controls |

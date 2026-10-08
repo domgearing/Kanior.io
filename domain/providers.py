@@ -49,6 +49,27 @@ class Submission:
 
 
 @dataclass(frozen=True)
+class CaptureGrant:
+    capture_ref: str
+    state: str
+
+
+@dataclass(frozen=True)
+class CaptureEvent:
+    event_id: str
+    capture_ref: str
+    state: str
+
+
+@dataclass(frozen=True)
+class StoredCapture:
+    capture_ref: str
+    stored_object: StoredObject
+    duration_ms: int
+    gap_count: int
+
+
+@dataclass(frozen=True)
 class EvidenceSelectionResult:
     selected_passages: tuple[str, ...]
 
@@ -76,6 +97,20 @@ class TranscriptionProvider(Protocol):
     def get_status(self, submission_ref: str) -> str: ...
 
     def fetch_result(self, submission_ref: str) -> RawTranscriptResult: ...
+
+    def delete_result(self, submission_ref: str, operation_key: str) -> str: ...
+
+
+class CaptureProvider(Protocol):
+    def create_session(self, capture_session_id: str, operation_key: str) -> CaptureGrant: ...
+
+    def verify_notification(self, raw_body: bytes, signature: str) -> CaptureEvent: ...
+
+    def copy_original(
+        self, capture_ref: str, storage: ObjectStorage, operation_key: str
+    ) -> StoredCapture: ...
+
+    def delete_capture(self, capture_ref: str, operation_key: str) -> str: ...
 
 
 class ModelProvider(Protocol):

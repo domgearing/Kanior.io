@@ -141,12 +141,12 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        CREATE OR REPLACE FUNCTION kanior_current_uuid(setting_name text) RETURNS uuid
+        CREATE OR REPLACE FUNCTION verelo_current_uuid(setting_name text) RETURNS uuid
         LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting(setting_name, true), '')::uuid $$;
-        CREATE OR REPLACE FUNCTION kanior_scope_allows(row_tenant uuid, row_workspace uuid) RETURNS boolean
+        CREATE OR REPLACE FUNCTION verelo_scope_allows(row_tenant uuid, row_workspace uuid) RETURNS boolean
         LANGUAGE sql STABLE AS $$
-            SELECT kanior_current_uuid('app.tenant_id') = row_tenant
-               AND kanior_current_uuid('app.workspace_id') = row_workspace
+            SELECT verelo_current_uuid('app.tenant_id') = row_tenant
+               AND verelo_current_uuid('app.workspace_id') = row_workspace
         $$;
         """
     )
@@ -155,16 +155,16 @@ def upgrade() -> None:
         op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
         workspace_column = "workspace_id"
         if table in {"users"}:
-            policy = "kanior_current_uuid('app.tenant_id') = tenant_id"
+            policy = "verelo_current_uuid('app.tenant_id') = tenant_id"
         elif table == "workspaces":
-            policy = "kanior_current_uuid('app.tenant_id') = tenant_id"
+            policy = "verelo_current_uuid('app.tenant_id') = tenant_id"
         else:
-            policy = f"kanior_scope_allows(tenant_id, {workspace_column})"
+            policy = f"verelo_scope_allows(tenant_id, {workspace_column})"
         op.execute(f"CREATE POLICY {table}_scope_policy ON {table} USING ({policy}) WITH CHECK ({policy})")
 
 
 def downgrade() -> None:
     for table in ("outbox_events", "audit_events", "documents", "project_memberships", "projects", "users", "workspaces", "tenants"):
         op.execute(f"DROP TABLE {table}")
-    op.execute("DROP FUNCTION IF EXISTS kanior_scope_allows(uuid, uuid)")
-    op.execute("DROP FUNCTION IF EXISTS kanior_current_uuid(text)")
+    op.execute("DROP FUNCTION IF EXISTS verelo_scope_allows(uuid, uuid)")
+    op.execute("DROP FUNCTION IF EXISTS verelo_current_uuid(text)")

@@ -10,7 +10,9 @@ Future FastAPI routes must import these models directly, use the registered oper
 
 ## Scope and refinements
 
-The first slice supports an authenticated enabled employee, projects, membership and document metadata. It needs real authorization/RLS before any externally accessible deployment; tests may inject identities under SECURITY.md. It is a subset of Phase 1, not its completion gate.
+The implemented surface supports authenticated employees, projects, membership, document metadata,
+and the approved Phase 2 ingestion workflow. Restricted-role authorization/RLS is required for every
+operation; tests may inject identities only inside the process under SECURITY.md.
 
 The spec leaves pagination encoding, length limits, project-creation entitlement, and membership revision mechanics unspecified. The concrete conventions below are engineering refinements, not new product features. Project creation requires explicit server-provisioned `projects:create`; provisioning policy remains with the company. New project creator becomes its owner. Tenant/workspace/user provisioning and capability administration have no public endpoint in this slice.
 
@@ -18,11 +20,19 @@ Use `/documents` and `document_id`, per architecture §§8, 24, rather than the 
 
 ## Trusted authentication context
 
-`AuthContext` is internal, never a request body or trusted header. It contains `principal_kind`, `principal_id`, `tenant_id`, `workspace_id`, `authorization_epoch`, `capabilities`, and `request_id`. An employee principal ID is the internal user UUID; service IDs are provisioned workload identities. Identity/session resolution validates Entra and derives scope server-side. Services cannot call employee-only foundation HTTP endpoints.
+`AuthContext` is internal, never a request body or trusted header. It contains `principal_kind`, `principal_id`, `tenant_id`, `workspace_id`, `authorization_epoch`, `capabilities`, and `request_id`. An employee principal ID is the internal user UUID; service IDs are provisioned workload identities. Identity/session resolution validates the configured provider and derives scope server-side. ADR-005 permits explicit-allowlist magic links only in local/test; Entra remains the confidential/production provider. Both map to the same immutable internal user UUID and opaque session. Services cannot call employee-only foundation HTTP endpoints.
 
 Workspace is the provisioned default workspace in this slice. Current user enabled state, membership, project epoch, and resource state are checked per operation, not trusted from an old session snapshot. Clients cannot choose tenant/workspace/creator/owner through body, query, cookie contents, or arbitrary headers.
 
-Cookie: `kanior_session`, opaque server-side session, Secure/HttpOnly/SameSite=Lax. Mutations require `X-CSRF-Token` bound to session and an allowed Origin; strict CORS. `/me` supplies a CSRF token over the authenticated no-store response. It is not an access token and never enters telemetry. Login/callback/logout transport is deferred to identity implementation; it must satisfy Entra/PKCE/session rules, not create public signup.
+Cookie: `verelo_session`, opaque server-side session, Secure/HttpOnly/SameSite=Lax. Mutations require `X-CSRF-Token` bound to session and an allowed Origin; strict CORS. `/me` supplies a CSRF token over the authenticated no-store response. It is not an access token and never enters telemetry. Development login uses the operations below. No operation creates users. `GET /auth/mode` exposes only the configured sign-in method. Entra browser navigation uses `GET /auth/entra/start` and Microsoft's `form_post` to `POST /auth/entra/callback`; these redirect-only browser transports are intentionally outside the JSON operation registry. They store a one-time, browser-bound authorization-code flow server-side and issue the same opaque session only for a pre-provisioned enabled internal employee.
+
+## Development authentication operations
+
+| Operation ID / method and path | Input → success | Security/effects |
+|---|---|---|
+| `request_magic_link` / `POST /auth/magic-link/request` | email → 202 neutral acceptance | Exact Origin; explicit enabled allowlist; hashed rate limits; no eligibility disclosure. |
+| `consume_magic_link` / `POST /auth/magic-link/consume` | one-time token → 200 | Exact Origin; atomic single use and opaque session issuance; token never logged. |
+| `logout` / `POST /auth/logout` | session + CSRF → 200 | Revokes server session and clears cookie. |
 
 ## Foundation operations
 
@@ -31,16 +41,45 @@ All paths below have `/api/v1` prefix. Request/response field definitions and ex
 | Operation ID / method and path | Input → success | Required authorization / effects |
 |---|---|---|
 | `get_me` / `GET /me` | Session → 200 `MeResponse` | Enabled assigned employee. Identity, server-provisioned capabilities, default workspace and CSRF token; no project content or global admin content grant. |
+| `update_me` / `PATCH /me` | `ProfileUpdate` → 200 `MeResponse` | Updates only the current employee's display name. Internal UUID and login email are immutable through this operation. |
 | `list_projects` / `GET /projects` | `limit`, `cursor` → 200 `ProjectPage` | Only active projects with current enabled membership in tenant/workspace. No unauthorized totals. |
 | `create_project` / `POST /projects` | `ProjectCreate` → 201 `Project` | Explicit `projects:create`; default configured workspace/policies. Insert creator owner membership atomically, audit; return Location. |
 | `get_project` / `GET /projects/{project_id}` | UUID → 200 `Project` | Current project member. |
+| `list_project_members` / `GET /projects/{project_id}/members` | UUID → 200 `MemberPage` | Current owner; lists enabled and disabled memberships for access administration. |
+| `set_project_member_by_email` / `PUT /projects/{project_id}/members/by-email` | `MembershipByEmailPut` → 200 `Membership` | Current owner; exact enabled, pre-provisioned same-tenant employee email lookup followed by the same revision-CAS membership operation. Unknown and inaccessible targets return 404. |
 | `get_project_member` / `GET /projects/{project_id}/members/{user_id}` | UUIDs → 200 `Membership` | Current owner; read revision for CAS/retry reconciliation. Missing membership or inaccessible target returns 404. |
 | `set_project_member` / `PUT /projects/{project_id}/members/{user_id}` | `MembershipPut` → 200 `Membership` | Current owner; target is enabled same-tenant employee. Revision compare-and-swap, audit, epoch increment, outbox `access.changed`. Owner-user demotion/removal rejected. |
 | `list_documents` / `GET /projects/{project_id}/documents` | UUID, page → 200 `DocumentPage` | Project reader or higher; active/non-tombstoned metadata only. |
 | `create_document` / `POST /projects/{project_id}/documents` | `DocumentCreate` → 201 `Document` | Contributor or owner. Consent acknowledged true, current configured policy version, server actor/time; audit and Location. No upload or external job. |
 | `get_document` / `GET /documents/{document_id}` | UUID → 200 `Document` | Derive project from row and require current membership. Never load globally then return metadata before authorization. |
 
-Membership `expected_revision=0` means insert only if absent. Existing rows require their exact revision; success increments it, including enable/disable changes. Concurrency conflicts return 409. `enabled=false` keeps the record and blocks access. Creation of another owner membership is permitted; changing the designated owner is deferred. After an uncertain response, read current membership before retrying; no public member-list endpoint is promised yet.
+## Phase 2 ingestion and publication operations
+
+The exact operation registry in `contracts/http.py` is authoritative. Contributors and owners may
+create/finalize sources; readers may read permitted state and published output; only project owners
+may create human-corrected drafts, approve them, and publish. Deterministic policy-v2 approval is an
+internal service decision bound to the exact hash.
+
+| Operation | Purpose |
+|---|---|
+| `POST /documents/{document_id}/ingestions` | Create an idempotent source intent for approved audio/transcript formats and limits. |
+| `PUT /ingestions/{id}/chunks/{sequence}` | Store the next hash-verified immutable chunk; same-sequence/same-hash replay is safe. |
+| `POST /ingestions/{id}/finalize` | Verify full size/hash, decode/quarantine, preserve the original, parse or synthetically transcribe, reconcile, clean, and create an immutable draft. |
+| `GET /ingestions/{id}` and `GET /documents/{id}/ingestions` | Return safe workflow state and authorized actions without provider/object references. |
+| `GET/PUT /ingestions/{id}/draft` | Read the current immutable draft or create a new owner-corrected draft using revision/hash CAS. |
+| `POST /ingestions/{id}/approvals` | Owner approval of the exact current revision/hash. |
+| `POST /ingestions/{id}/publication` | Atomically publish the approved hash, activate it, create passages/index jobs, audit, and enqueue the outbox event. |
+| `POST /ingestions/{id}/retry` and `/abort` | Apply only legal retry/abort transitions. |
+| `GET /documents/{id}/transcript-publication` | Reproduce and hash-check active canonical bytes. |
+| `GET /documents/{id}/transcript-downloads/{format}` | Deterministically render TXT, Markdown, or JSON without creating a version. |
+| `GET /source-assets/{id}/content` | Authorized immutable source read; private storage references never leave the server. |
+
+The public combined `POST /documents/{id}/transcript-publications` shortcut was removed. There is one
+publication path. JSON download/source envelopes use base64 so the generated JSON contract remains
+closed; the web client turns them into local downloads. Range streaming is a future compatible
+transport refinement and cannot weaken authorization.
+
+Membership `expected_revision=0` means insert only if absent. Existing rows require their exact revision; success increments it, including enable/disable changes. Concurrency conflicts return 409. `enabled=false` keeps the record and blocks access. Creation of another owner membership is permitted; changing the designated owner is deferred. After an uncertain response, read current membership before retrying. Email assignment never provisions a user and never grants access based on domain.
 
 ## Errors, pagination, retries and tracing
 
@@ -50,7 +89,7 @@ All responses include server-generated `X-Request-ID` (UUID string) matching con
 
 Lists return `{items, next_cursor}`; null cursor means end. Default limit 50, minimum 1, maximum 100. Order ascending by immutable `(created_at, id)`; use keyset comparison, never offset pagination. Cursor is opaque, authenticated, bound to principal, tenant/workspace, route/project, sort/filter context and original upper `(created_at, id)` watermark. Reject malformed/tampered/wrong-context cursors with 422. Refresh authorization on every page; watermark prevents later-created rows entering this traversal but is not an authorization snapshot. No total counts. Return a cursor only if an extra authorized row exists beyond the page.
 
-Foundation POST creation is deliberately not automatically retryable: a lost response requires reconciliation, not blind re-submit. No `Idempotency-Key` support is advertised on these metadata endpoints. Membership uses revision CAS. The spec mandates scoped durable keys for upload finalization, transcription submission, publication, export and annotation creation; those future operations must persist `(principal, action, resource, key)`, payload fingerprint, outcome and retry-window expiry atomically with their effect. Same key/different payload returns 409, replay reauthorizes, concurrent duplicates cannot double-apply. Retry-window durations must be finalized with those contracts; no guessed TTL is committed here.
+Foundation POST creation is deliberately not automatically retryable: a lost response requires reconciliation, not blind re-submit. No `Idempotency-Key` support is advertised on those metadata endpoints. Membership uses revision CAS. Phase 2 source creation, upload finalization, publication, retry, and abort use scoped durable operation keys and payload hashes; provider-stage keys are deterministic internal keys. Same key/different payload returns 409, replay reauthorizes, and the operation record commits atomically with its effect. Export and annotation idempotency remain owned by their later-phase contracts.
 
 ## Internal foundation services
 
@@ -79,7 +118,9 @@ Selection schemas extract spec §9.5 and architecture §14. ID mode is zero to e
 
 Events are identifiers-only envelopes with event/schema version, tenant/workspace/project scope, optional document (required for document events), aggregate ID, UTC time, trace ID and a closed typed `data` object. `access.changed` is defined now for membership mutations. `transcript.published` is reserved for Phase 2. Aggregate ID must match project or document respectively. JSON Schema cannot prove referential ownership; consumers verify scope and current aggregate state. Consumers deduplicate by event ID and operation key, use revision/epoch to reject stale work, and never assume global ordering. Other event names in spec §10.1 remain provisional, not an open arbitrary payload escape hatch.
 
-Later upload, jobs, approval/publication, quote response, synthesis, export, annotations and governance APIs remain provisional. Finalize each before implementation using the existing spec; do not generate permissive placeholder endpoints now.
+Phase 3 quote response, synthesis, export, annotations, and governance APIs remain provisional.
+Finalize each before implementation using the existing spec; do not generate permissive placeholder
+endpoints now.
 
 ## Foundation acceptance gate
 

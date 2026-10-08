@@ -4,7 +4,7 @@
 
 No human or coding agent should be able to merge code to `main` simply because it "looks done."
 
-KaniorAI uses two independent gates:
+Verelo uses two independent gates:
 
 1. **Local readiness gate** — `./scripts/pr-ready.sh` must pass before a PR is created or marked ready.
 2. **GitHub merge gate** — GitHub Actions reruns independent checks and the repository ruleset requires `PR Gate / required` to pass before merge.

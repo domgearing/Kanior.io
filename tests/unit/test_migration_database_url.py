@@ -6,12 +6,12 @@ from migrations.database_url import normalize_database_url
 
 
 def test_implicit_postgresql_url_uses_psycopg_3() -> None:
-    database_url = "postgresql://postgres:secret@127.0.0.1:5432/kanior?sslmode=require"
+    database_url = "postgresql://postgres:secret@127.0.0.1:5432/verelo?sslmode=require"
 
     normalized_url = normalize_database_url(database_url)
 
     assert normalized_url == (
-        "postgresql+psycopg://postgres:secret@127.0.0.1:5432/kanior?sslmode=require"
+        "postgresql+psycopg://postgres:secret@127.0.0.1:5432/verelo?sslmode=require"
     )
     engine = create_engine(normalized_url)
     try:
@@ -21,7 +21,7 @@ def test_implicit_postgresql_url_uses_psycopg_3() -> None:
 
 
 def test_explicit_psycopg_url_is_unchanged() -> None:
-    database_url = "postgresql+psycopg://kanior_migrator:secret@localhost:5432/kanior"
+    database_url = "postgresql+psycopg://verelo_migrator:secret@localhost:5432/verelo"
 
     assert normalize_database_url(database_url) == database_url
 

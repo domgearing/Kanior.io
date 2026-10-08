@@ -19,6 +19,6 @@
     "build": "corepack pnpm --filter @verelo/web build && corepack pnpm --filter @verelo/desktop build"
   },
   "devDependencies": {
-    "prettier": "3.7.4"
+    "prettier": "3.9.9"
   }
 }

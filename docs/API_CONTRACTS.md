@@ -32,6 +32,8 @@ Cookie: `verelo_session`, opaque server-side session, Secure/HttpOnly/SameSite=L
 |---|---|---|
 | `request_magic_link` / `POST /auth/magic-link/request` | email → 202 neutral acceptance | Exact Origin; explicit enabled allowlist; hashed rate limits; no eligibility disclosure. |
 | `consume_magic_link` / `POST /auth/magic-link/consume` | one-time token → 200 | Exact Origin; atomic single use and opaque session issuance; token never logged. |
+| `request_development_password` / `POST /auth/dev-password/request` | email → 202 neutral acceptance | Local/test mailbox only; same enabled allowlist and issuance limits; no eligibility disclosure. |
+| `consume_development_password` / `POST /auth/dev-password/consume` | email + one-time password → 200 | Exact Origin; email-bound hash, atomic single use, ten-minute expiry; no credential logging. |
 | `logout` / `POST /auth/logout` | session + CSRF → 200 | Revokes server session and clears cookie. |
 
 ## Foundation operations
@@ -67,17 +69,52 @@ internal service decision bound to the exact hash.
 | `POST /ingestions/{id}/finalize` | Verify full size/hash, decode/quarantine, preserve the original, parse or synthetically transcribe, reconcile, clean, and create an immutable draft. |
 | `GET /ingestions/{id}` and `GET /documents/{id}/ingestions` | Return safe workflow state and authorized actions without provider/object references. |
 | `GET/PUT /ingestions/{id}/draft` | Read the current immutable draft or create a new owner-corrected draft using revision/hash CAS. |
+| `GET /ingestions/{id}/word-alignment` | Return the integrity-checked original parsed segments and provider word timing only when raw provider words match that original text exactly. Flag when the reviewed canonical draft differs, so clients show the timed source separately rather than pretending corrections have timestamps. |
 | `POST /ingestions/{id}/approvals` | Owner approval of the exact current revision/hash. |
 | `POST /ingestions/{id}/publication` | Atomically publish the approved hash, activate it, create passages/index jobs, audit, and enqueue the outbox event. |
 | `POST /ingestions/{id}/retry` and `/abort` | Apply only legal retry/abort transitions. |
 | `GET /documents/{id}/transcript-publication` | Reproduce and hash-check active canonical bytes. |
-| `GET /documents/{id}/transcript-downloads/{format}` | Deterministically render TXT, Markdown, or JSON without creating a version. |
+| `GET /documents/{id}/transcript-downloads/{format}` | Render TXT, Markdown, JSON, or PDF from the authorized pinned publication without creating a version. Unsupported PDF glyphs fail rather than silently changing text. |
 | `GET /source-assets/{id}/content` | Authorized immutable source read; private storage references never leave the server. |
+| `GET /source-assets/{id}/waveform` | Return 320 normalized amplitude bins decoded from an authorized original audio asset, with its measured duration. No raw samples or private storage references are returned. |
+
+### Web-controlled desktop recording (ADR-006)
+
+`GET /recorder-devices` lists at most 20 recent devices of the current employee with advisory
+online/state metadata, never provider credentials. The signed-in desktop app sends
+`PUT /recorder-devices/{device_id}/heartbeat` every three seconds; this and command claim/result
+require a private 256-bit device token in `X-Recorder-Device-Token` in addition to the employee
+session and Origin/CSRF checks. Only a token digest is stored. A different employee or invalid
+device token receives the ordinary 404 shape.
+
+`POST /recorder-devices/{device_id}/commands` accepts an enumerated Start/Pause/Resume/Stop
+action, a client UUID operation key, and a document UUID only for Start. Start requires an active
+same-scope document and current contributor/owner membership. Pause/Resume recheck that access;
+Stop can be requested by the device owner even after project revocation to end local Recall capture;
+the server transition may then fail and must be reconciled, never shown as completed.
+The API allows one open command per device, returns a safe command ID/state, and expires commands
+after two minutes. A duplicate operation key with the same payload returns the original command;
+a different payload conflicts. The desktop claims with
+`POST /recorder-devices/{device_id}/commands/claim`, executes only the named Recall action, and
+reports safe completion/failure with `POST /recorder-commands/{command_id}/result`. The web app
+checks `GET /recorder-commands/{command_id}`; it must not label a pending command as a recording.
+Claim rechecks current write membership and marks a revoked command failed without dispatch;
+the capture transition endpoint independently rejects reader mutations.
+Before accepting a completed result, the API checks the employee-owned capture session ID,
+document binding, and persisted state expected for that action; a desktop status message alone is
+not proof of capture.
+An expired command is uncertain: inspect desktop state before retrying Start. Device and command
+rows are tenant/workspace/employee scoped under forced RLS; command audit records contain only
+identifiers, action, and safe outcome.
+
+### Ingestion and membership notes
 
 The public combined `POST /documents/{id}/transcript-publications` shortcut was removed. There is one
 publication path. JSON download/source envelopes use base64 so the generated JSON contract remains
-closed; the web client turns them into local downloads. Range streaming is a future compatible
-transport refinement and cannot weaken authorization.
+closed; clients turn them into local downloads and audio playback. This currently loads the whole
+source asset into memory; authenticated range streaming is the intended large-recording transport
+refinement and cannot weaken authorization. Word alignment is display metadata, not canonical
+source offsets, and is unavailable after edits that no longer match original provider text.
 
 Membership `expected_revision=0` means insert only if absent. Existing rows require their exact revision; success increments it, including enable/disable changes. Concurrency conflicts return 409. `enabled=false` keeps the record and blocks access. Creation of another owner membership is permitted; changing the designated owner is deferred. After an uncertain response, read current membership before retrying. Email assignment never provisions a user and never grants access based on domain.
 

@@ -13,13 +13,15 @@ from connectors.microsoft_entra import EntraAuthorizationCodeAdapter
 from contracts.models import (
     AuthenticationMode,
     AuthenticationResult,
+    DevelopmentPasswordConsume,
+    DevelopmentPasswordRequestAccepted,
     LogoutResult,
     MagicLinkConsume,
     MagicLinkRequest,
     MagicLinkRequestAccepted,
 )
 from domain.errors import DomainError
-from domain.identity import IdentityProvider
+from domain.identity import IdentityProvider, MagicLinkIdentityProvider
 
 
 def _source(request: Request) -> str:
@@ -37,12 +39,61 @@ def create_identity_router(
     *,
     cookie_secure: bool,
     entra_provider: EntraAuthorizationCodeAdapter | None = None,
+    dev_password_provider: MagicLinkIdentityProvider | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/auth", tags=["identity"])
 
     @router.get("/mode", response_model=AuthenticationMode, operation_id="get_authentication_mode")
     def authentication_mode() -> AuthenticationMode:
-        return AuthenticationMode(provider="entra" if entra_provider else "magic_link")
+        return AuthenticationMode(
+            provider=(
+                "entra"
+                if entra_provider
+                else "dev_password"
+                if dev_password_provider
+                else "magic_link"
+            )
+        )
+
+    @router.post(
+        "/dev-password/request",
+        response_model=DevelopmentPasswordRequestAccepted,
+        status_code=202,
+    )
+    def request_development_password(
+        body: MagicLinkRequest, request: Request
+    ) -> DevelopmentPasswordRequestAccepted:
+        if dev_password_provider is None:
+            raise DomainError("not_found", 404, "The resource was not found.")
+        _require_exact_origin(request)
+        dev_password_provider.begin_password(
+            body.email, _source(request), str(request.state.request_id)
+        )
+        return DevelopmentPasswordRequestAccepted(
+            status="accepted",
+            message="If eligible, a one-time password is in the local mailbox.",
+        )
+
+    @router.post("/dev-password/consume", response_model=AuthenticationResult)
+    def consume_development_password(
+        body: DevelopmentPasswordConsume, request: Request, response: Response
+    ) -> AuthenticationResult:
+        if dev_password_provider is None:
+            raise DomainError("not_found", 404, "The resource was not found.")
+        _require_exact_origin(request)
+        established = dev_password_provider.complete_password(
+            body.email, body.password, _source(request), str(request.state.request_id)
+        )
+        response.set_cookie(
+            "verelo_session",
+            established.opaque_token,
+            secure=cookie_secure,
+            httponly=True,
+            samesite="lax",
+            max_age=8 * 60 * 60,
+            path="/",
+        )
+        return AuthenticationResult(status="authenticated")
 
     @router.post("/magic-link/request", response_model=MagicLinkRequestAccepted, status_code=202)
     def request_magic_link(body: MagicLinkRequest, request: Request) -> MagicLinkRequestAccepted:

@@ -4,51 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Verelo Capture</title>
-    <style>
-      body {
-        background: #f4f7fb;
-        color: #172235;
-        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-        margin: 0;
-      }
-
-      main {
-        margin: 12vh auto;
-        max-width: 42rem;
-        padding: 2rem;
-      }
-      button {
-        margin: 0.25rem;
-        padding: 0.6rem 0.9rem;
-      }
-      output {
-        display: block;
-        margin-top: 1rem;
-        white-space: pre-wrap;
-      }
-      .history-status {
-        display: block;
-        color: #526173;
-        font-size: 0.9rem;
-      }
-      #history li {
-        border-bottom: 1px solid #dce3ed;
-        margin-bottom: 0.75rem;
-        padding-bottom: 0.75rem;
-      }
-      #history button {
-        margin-left: 0;
-      }
-    </style>
+    <link rel="stylesheet" href="design-system/tokens/tokens.css" />
+    <link rel="stylesheet" href="controls.css" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main>
-      <p>Verelo Capture</p>
-      <h1>Meeting audio capture</h1>
+      <header class="capture-header">
+        <div class="brand" aria-label="Verelo">
+          <img
+            class="brand-light"
+            src="design-system/logos/verelo-lockup-color.png"
+            alt="Verelo"
+          />
+          <img
+            class="brand-dark"
+            src="design-system/logos/verelo-lockup-color-reverse.png"
+            alt="Verelo"
+          />
+        </div>
+        <span>Desktop recorder</span>
+      </header>
+      <h1>Capture your next conversation</h1>
+      <p class="capture-intro">
+        Choose a meeting, record your call, and return to Verelo to review the
+        transcript.
+      </p>
       <p id="mode">Checking connection…</p>
+      <p id="recorder-connection" role="status">Connecting web controls…</p>
       <section id="sign-in">
-        <button id="open-login">Sign in to Verelo</button>
+        <h2>Connect your workspace</h2>
+        <p>Sign in with the same account you use on the web.</p>
+        <button id="open-login" class="button primary">
+          Sign in to Verelo
+        </button>
         <button id="check-login">Continue after signing in</button>
+        <p id="password-login-hint" hidden>
+          In the sign-in window, enter your email and the one-time password from
+          the development mailbox. Then click Continue after signing in.
+        </p>
         <div id="magic-link-controls">
           <p>
             For local magic-link sign-in, open the sign-in link from the
@@ -58,12 +52,13 @@
             id="sign-in-link"
             type="url"
             placeholder="Paste your Verelo sign-in link"
-            style="width: 75%"
+            aria-label="Verelo sign-in link"
           />
           <button id="finish-login">Use sign-in link</button>
         </div>
       </section>
       <section id="meeting-picker" hidden>
+        <h2>Choose your meeting</h2>
         <form id="create-project" hidden>
           <label
             >New project
@@ -85,7 +80,12 @@
         ></label>
         <button id="select-meeting">Use meeting</button>
         <form id="create-meeting">
-          <input id="meeting-title" required placeholder="New meeting title" />
+          <input
+            id="meeting-title"
+            aria-label="New meeting title"
+            required
+            placeholder="New meeting title"
+          />
           <label
             ><input id="meeting-consent" type="checkbox" required /> I confirm
             everyone required to consent has agreed to this recording.</label
@@ -99,7 +99,7 @@
         window with audio.
       </p>
       <div id="capture-controls" aria-label="Capture controls" hidden>
-        <button id="start">Start recording</button>
+        <button id="start" class="button primary">Start recording</button>
         <button id="pause">Pause</button>
         <button id="resume">Resume</button>
         <button id="stop">Stop and process</button>
@@ -113,12 +113,45 @@
         <ul id="history"></ul>
       </section>
     </main>
+    <aside id="review-panel" aria-label="Recording review" hidden>
+      <header>
+        <h2>Recording review</h2>
+        <button id="close-review">Close</button>
+      </header>
+      <div id="review-content">
+        <div id="review-playback">
+          <audio id="review-audio" controls preload="metadata" hidden></audio>
+          <section id="review-waveform" hidden>
+            <strong>Recording waveform</strong>
+            <span class="waveform-help"
+              >Click to play or pause · Drag to seek</span
+            >
+            <div
+              id="review-waveform-track"
+              role="slider"
+              tabindex="0"
+              aria-label="Recording waveform. Click to play or pause, drag or use arrow keys to seek"
+              aria-valuemin="0"
+            ></div>
+            <div id="review-waveform-times">
+              <span id="review-waveform-current">0:00</span
+              ><span id="review-waveform-total">0:00</span>
+            </div>
+          </section>
+          <p id="review-waveform-status" role="status"></p>
+          <button id="download-audio" hidden>Download raw audio</button>
+        </div>
+        <p id="review-note"></p>
+        <div id="review-transcript" aria-label="Audio-synced transcript"></div>
+      </div>
+    </aside>
     <script>
       const status = document.querySelector("#status");
       const processing = document.querySelector("#processing");
       const historySection = document.querySelector("#history-section");
       const history = document.querySelector("#history");
       const mode = document.querySelector("#mode");
+      const recorderConnection = document.querySelector("#recorder-connection");
       const signIn = document.querySelector("#sign-in");
       const picker = document.querySelector("#meeting-picker");
       const controls = document.querySelector("#capture-controls");
@@ -126,6 +159,36 @@
       const meetings = document.querySelector("#meetings");
       const createProject = document.querySelector("#create-project");
       const createMeeting = document.querySelector("#create-meeting");
+      const reviewPanel = document.querySelector("#review-panel");
+      const reviewAudio = document.querySelector("#review-audio");
+      const reviewTranscript = document.querySelector("#review-transcript");
+      const reviewNote = document.querySelector("#review-note");
+      const downloadAudio = document.querySelector("#download-audio");
+      const reviewWaveform = document.querySelector("#review-waveform");
+      const reviewWaveformTrack = document.querySelector(
+        "#review-waveform-track",
+      );
+      const reviewWaveformCurrent = document.querySelector(
+        "#review-waveform-current",
+      );
+      const reviewWaveformTotal = document.querySelector(
+        "#review-waveform-total",
+      );
+      const reviewWaveformStatus = document.querySelector(
+        "#review-waveform-status",
+      );
+      let waveformData = null;
+      let waveformClip = null;
+      let waveformPlayhead = null;
+      let waveformPointer = null;
+      let waveformAnimationFrame = null;
+      let reviewAudioUrl = null;
+      let reviewMediaType = "";
+      let reviewSourceId = null;
+      let reviewWordNodes = [];
+      let reviewSegmentNodes = [];
+      let activeReviewNode = null;
+      let reviewRequestId = 0;
       let recorder;
       let displayStream;
       let microphoneStream;
@@ -147,7 +210,449 @@
         status.textContent =
           error instanceof Error ? error.message : "Request failed";
       };
+      const closeReview = () => {
+        reviewRequestId += 1;
+        if (waveformAnimationFrame !== null)
+          cancelAnimationFrame(waveformAnimationFrame);
+        waveformAnimationFrame = null;
+        reviewPanel.hidden = true;
+        reviewAudio.pause();
+        reviewAudio.removeAttribute("src");
+        reviewAudio.load();
+        if (reviewAudioUrl) URL.revokeObjectURL(reviewAudioUrl);
+        reviewAudioUrl = null;
+        reviewWordNodes = [];
+        reviewSegmentNodes = [];
+        activeReviewNode = null;
+        waveformData = null;
+        waveformClip = null;
+        waveformPlayhead = null;
+        waveformPointer = null;
+        reviewWaveform.hidden = true;
+        reviewWaveformStatus.textContent = "";
+      };
+      document
+        .querySelector("#close-review")
+        .addEventListener("click", closeReview);
+      const updateWaveformPosition = () => {
+        const position = reviewAudio.currentTime * 1000;
+        if (waveformData) {
+          const fraction = Math.max(
+            0,
+            Math.min(1, position / waveformData.duration_ms),
+          );
+          waveformPlayhead.setAttribute("x1", String(fraction * 320));
+          waveformPlayhead.setAttribute("x2", String(fraction * 320));
+          waveformClip?.setAttribute("width", String(fraction * 320));
+          reviewWaveformCurrent.textContent = waveformTime(position);
+          reviewWaveformTrack.setAttribute(
+            "aria-valuenow",
+            String(Math.round(position / 1000)),
+          );
+          reviewWaveformTrack.setAttribute(
+            "aria-valuetext",
+            `${waveformTime(position)} of ${waveformTime(waveformData.duration_ms)}`,
+          );
+        }
+      };
+      const updateReviewPosition = () => {
+        const position = reviewAudio.currentTime * 1000;
+        updateWaveformPosition();
+        const activeWord = reviewWordNodes.find(
+          (item) => item.start <= position && position < item.end,
+        );
+        const activeSegment = reviewSegmentNodes.find(
+          (item) => item.start <= position && position < item.end,
+        );
+        const next = activeWord?.node || activeSegment?.node || null;
+        if (next === activeReviewNode) return;
+        activeReviewNode?.classList.remove("active-word", "active");
+        next?.classList.add(activeWord ? "active-word" : "active");
+        next?.scrollIntoView({ block: "nearest" });
+        activeReviewNode = next;
+      };
+      reviewAudio.addEventListener("timeupdate", updateReviewPosition);
+      reviewAudio.addEventListener("seeked", updateReviewPosition);
+      const animateWaveformPosition = () => {
+        waveformAnimationFrame = null;
+        updateWaveformPosition();
+        if (!reviewAudio.paused && !reviewAudio.ended && !reviewPanel.hidden)
+          waveformAnimationFrame = requestAnimationFrame(
+            animateWaveformPosition,
+          );
+      };
+      reviewAudio.addEventListener("play", () => {
+        if (waveformAnimationFrame === null)
+          waveformAnimationFrame = requestAnimationFrame(
+            animateWaveformPosition,
+          );
+      });
+      for (const type of ["pause", "ended"])
+        reviewAudio.addEventListener(type, () => {
+          if (waveformAnimationFrame !== null)
+            cancelAnimationFrame(waveformAnimationFrame);
+          waveformAnimationFrame = null;
+          updateWaveformPosition();
+        });
+      const waveformTime = (milliseconds) => {
+        const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const remainder = seconds % 60;
+        return hours
+          ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
+          : `${minutes}:${String(remainder).padStart(2, "0")}`;
+      };
+      const renderWaveform = (value) => {
+        if (
+          !Number.isFinite(value.duration_ms) ||
+          value.duration_ms <= 0 ||
+          !Array.isArray(value.peaks) ||
+          value.peaks.length !== 320
+        )
+          return;
+        waveformData = value;
+        const weights = [1, 2, 3, 4, 3, 2, 1];
+        const smoothed = value.peaks.map((_, index) => {
+          let weighted = 0;
+          let total = 0;
+          for (let offset = -3; offset <= 3; offset += 1) {
+            const neighbor = value.peaks[index + offset];
+            if (neighbor === undefined) continue;
+            const weight = weights[offset + 3];
+            weighted += Math.max(0, Math.min(1, neighbor)) * weight;
+            total += weight;
+          }
+          return total ? weighted / total : 0;
+        });
+        const edge = (values, reverse) => {
+          const indexes = values.map((_, index) => index);
+          if (reverse) indexes.reverse();
+          let path = `L ${indexes[0]} ${values[indexes[0]].toFixed(2)}`;
+          for (let index = 0; index < indexes.length - 1; index += 1) {
+            const current = indexes[index];
+            const next = indexes[index + 1];
+            path += ` Q ${current} ${values[current].toFixed(2)} ${((current + next) / 2).toFixed(2)} ${((values[current] + values[next]) / 2).toFixed(2)}`;
+          }
+          const last = indexes[indexes.length - 1];
+          return `${path} L ${last} ${values[last].toFixed(2)}`;
+        };
+        const shape = `M 0 44 ${edge(
+          smoothed.map((peak) => 44 - peak * 38),
+          false,
+        )} ${edge(
+          smoothed.map((peak) => 44 + peak * 38),
+          true,
+        )} Z`;
+        const svg = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "svg",
+        );
+        svg.setAttribute("viewBox", "0 0 320 88");
+        svg.setAttribute("preserveAspectRatio", "none");
+        svg.setAttribute("aria-hidden", "true");
+        const background = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        background.setAttribute("d", shape);
+        background.setAttribute("fill", "var(--border-strong)");
+        svg.append(background);
+        const defs = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "defs",
+        );
+        const clip = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "clipPath",
+        );
+        clip.setAttribute("id", "review-played-clip");
+        waveformClip = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "rect",
+        );
+        waveformClip.setAttribute("height", "88");
+        waveformClip.setAttribute("width", "0");
+        clip.append(waveformClip);
+        defs.append(clip);
+        svg.append(defs);
+        const waveformFill = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        waveformFill.setAttribute("d", shape);
+        waveformFill.setAttribute("fill", "var(--accent-text)");
+        waveformFill.setAttribute("clip-path", "url(#review-played-clip)");
+        svg.append(waveformFill);
+        waveformPlayhead = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "line",
+        );
+        waveformPlayhead.setAttribute("y1", "0");
+        waveformPlayhead.setAttribute("y2", "88");
+        waveformPlayhead.setAttribute("stroke", "var(--ink)");
+        waveformPlayhead.setAttribute("stroke-width", "1.25");
+        svg.append(waveformPlayhead);
+        reviewWaveformTrack.replaceChildren(svg);
+        reviewWaveformTrack.setAttribute(
+          "aria-valuemax",
+          String(Math.ceil(value.duration_ms / 1000)),
+        );
+        reviewWaveformTotal.textContent = waveformTime(value.duration_ms);
+        reviewWaveform.hidden = false;
+        reviewWaveformStatus.textContent = "";
+        updateReviewPosition();
+      };
+      const seekWaveform = (clientX) => {
+        if (!waveformData) return;
+        const rect = reviewWaveformTrack.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const fraction = Math.max(
+          0,
+          Math.min(1, (clientX - rect.left) / rect.width),
+        );
+        reviewAudio.currentTime = (fraction * waveformData.duration_ms) / 1000;
+        updateReviewPosition();
+      };
+      reviewWaveformTrack.addEventListener("pointerdown", (event) => {
+        waveformPointer = {
+          id: event.pointerId,
+          startX: event.clientX,
+          dragged: false,
+        };
+        reviewWaveformTrack.setPointerCapture(event.pointerId);
+      });
+      reviewWaveformTrack.addEventListener("pointermove", (event) => {
+        if (waveformPointer?.id !== event.pointerId) return;
+        if (Math.abs(event.clientX - waveformPointer.startX) > 4)
+          waveformPointer.dragged = true;
+        if (waveformPointer.dragged) seekWaveform(event.clientX);
+      });
+      reviewWaveformTrack.addEventListener("pointerup", (event) => {
+        if (waveformPointer?.id !== event.pointerId) return;
+        const dragged = waveformPointer.dragged;
+        waveformPointer = null;
+        seekWaveform(event.clientX);
+        if (!dragged) {
+          if (reviewAudio.paused || reviewAudio.ended)
+            void reviewAudio.play().catch(() => {
+              reviewWaveformStatus.textContent =
+                "Playback could not start. Use the audio controls to try again.";
+            });
+          else reviewAudio.pause();
+        }
+      });
+      reviewWaveformTrack.addEventListener("pointercancel", () => {
+        waveformPointer = null;
+      });
+      reviewWaveformTrack.addEventListener("keydown", (event) => {
+        if (!waveformData) return;
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          if (reviewAudio.paused || reviewAudio.ended)
+            void reviewAudio.play().catch(() => {
+              reviewWaveformStatus.textContent =
+                "Playback could not start. Use the audio controls to try again.";
+            });
+          else reviewAudio.pause();
+          return;
+        }
+        const step = event.shiftKey ? 15 : 5;
+        const target =
+          event.key === "ArrowRight"
+            ? reviewAudio.currentTime + step
+            : event.key === "ArrowLeft"
+              ? reviewAudio.currentTime - step
+              : event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? waveformData.duration_ms / 1000
+                  : null;
+        if (target === null) return;
+        event.preventDefault();
+        reviewAudio.currentTime = Math.max(
+          0,
+          Math.min(target, waveformData.duration_ms / 1000),
+        );
+        updateReviewPosition();
+      });
+      const renderReviewTranscript = (draft, alignment) => {
+        reviewTranscript.replaceChildren();
+        reviewWordNodes = [];
+        reviewSegmentNodes = [];
+        const sourceSegments = Array.isArray(alignment.source_segments)
+          ? alignment.source_segments
+          : [];
+        const segments = sourceSegments.length
+          ? sourceSegments
+          : Array.isArray(draft.segments)
+            ? draft.segments
+            : [];
+        const matchesCanonical =
+          segments.map((item) => item.text).join("\n") === draft.canonical_text;
+        if (
+          !segments.some((item) => item.start_ms !== null || item.speaker_label)
+        ) {
+          const plain = document.createElement("pre");
+          plain.textContent = draft.canonical_text;
+          reviewTranscript.append(plain);
+          reviewNote.textContent =
+            "This reviewed version has no exact audio alignment. Word timing is not guessed.";
+          return;
+        }
+        reviewNote.textContent = matchesCanonical
+          ? alignment.available
+            ? "The highlighted word follows the original provider timing."
+            : "Exact word timing is unavailable; timed speaker turns will still follow playback."
+          : "Showing original audio-aligned transcription. Reviewed text differs and is available below.";
+        for (const [index, segment] of segments.entries()) {
+          const section = document.createElement("section");
+          const heading = document.createElement("strong");
+          const speaker =
+            segment.speaker_label?.replace(
+              /^speaker[-_ ]?(\d+)$/i,
+              (_match, number) => `Speaker ${Number(number)}`,
+            ) || "Speaker";
+          const time =
+            segment.start_ms === null
+              ? ""
+              : new Date(segment.start_ms).toISOString().slice(11, 19);
+          heading.textContent = time ? `${speaker} · ${time}` : speaker;
+          section.append(heading);
+          const line = document.createElement("p");
+          const aligned =
+            alignment.segments?.find((item) => item.index === index)?.words ||
+            [];
+          const characters = Array.from(segment.text);
+          let cursor = 0;
+          let valid = true;
+          const nodeStart = reviewWordNodes.length;
+          for (const word of aligned) {
+            if (
+              word.start_character < cursor ||
+              word.end_character > characters.length ||
+              characters
+                .slice(word.start_character, word.end_character)
+                .join("") !== word.text
+            ) {
+              valid = false;
+              break;
+            }
+            line.append(
+              document.createTextNode(
+                characters.slice(cursor, word.start_character).join(""),
+              ),
+            );
+            const span = document.createElement("span");
+            span.textContent = word.text;
+            line.append(span);
+            reviewWordNodes.push({
+              node: span,
+              start: word.start_ms,
+              end: word.end_ms,
+            });
+            cursor = word.end_character;
+          }
+          if (!valid) {
+            line.replaceChildren(document.createTextNode(segment.text));
+            reviewWordNodes.length = nodeStart;
+          } else
+            line.append(
+              document.createTextNode(characters.slice(cursor).join("")),
+            );
+          section.append(line);
+          reviewTranscript.append(section);
+          if (segment.start_ms !== null && segment.end_ms !== null) {
+            reviewSegmentNodes.push({
+              node: section,
+              start: segment.start_ms,
+              end: segment.end_ms,
+            });
+          }
+        }
+        if (!matchesCanonical) {
+          const reviewed = document.createElement("details");
+          const summary = document.createElement("summary");
+          summary.textContent = "Reviewed transcript text";
+          const text = document.createElement("pre");
+          text.textContent = draft.canonical_text;
+          reviewed.append(summary, text);
+          reviewTranscript.append(reviewed);
+        }
+      };
+      const openReview = async (item) => {
+        closeReview();
+        const requestId = reviewRequestId;
+        reviewPanel.hidden = false;
+        reviewNote.textContent = "Loading transcript and original audio…";
+        try {
+          if (item.draft_sha256) {
+            const result = await window.vereloDesktop.meetings.review(
+              item.ingestion_id,
+            );
+            if (requestId !== reviewRequestId) return;
+            renderReviewTranscript(result.draft, result.alignment);
+          } else {
+            reviewTranscript.replaceChildren();
+            reviewNote.textContent =
+              "Transcript processing is not complete yet.";
+          }
+          if (item.source_kind === "audio" && item.source_asset_id) {
+            const payload = await window.vereloDesktop.meetings.audio(
+              item.ingestion_id,
+            );
+            if (requestId !== reviewRequestId) return;
+            const bytes = Uint8Array.from(
+              atob(payload.content_base64),
+              (character) => character.charCodeAt(0),
+            );
+            reviewAudioUrl = URL.createObjectURL(
+              new Blob([bytes], { type: payload.media_type }),
+            );
+            reviewAudio.src = reviewAudioUrl;
+            reviewAudio.hidden = false;
+            reviewMediaType = payload.media_type;
+            reviewSourceId = item.source_asset_id;
+            downloadAudio.hidden = false;
+            reviewWaveformStatus.textContent = "Preparing waveform…";
+            try {
+              const waveform = await window.vereloDesktop.meetings.waveform(
+                item.ingestion_id,
+              );
+              if (requestId !== reviewRequestId) return;
+              renderWaveform(waveform);
+            } catch {
+              if (requestId === reviewRequestId)
+                reviewWaveformStatus.textContent =
+                  "Waveform unavailable. Use the audio player to seek.";
+            }
+          } else {
+            reviewAudio.hidden = true;
+            downloadAudio.hidden = true;
+          }
+        } catch (error) {
+          if (requestId !== reviewRequestId) return;
+          reviewNote.textContent =
+            "Review could not be loaded. Check the API connection.";
+          showError(error);
+        }
+      };
+      downloadAudio.addEventListener("click", () => {
+        if (!reviewAudioUrl || !reviewSourceId) return;
+        const extension =
+          {
+            "audio/wav": "wav",
+            "audio/mpeg": "mp3",
+            "audio/mp4": "m4a",
+            "audio/webm": "webm",
+          }[reviewMediaType] || "bin";
+        const anchor = document.createElement("a");
+        anchor.href = reviewAudioUrl;
+        anchor.download = `recording-${reviewSourceId}.${extension}`;
+        anchor.click();
+      });
       const setSelectedMeeting = async (documentId) => {
+        closeReview();
         const document = await window.vereloDesktop.meetings.select(documentId);
         controls.hidden = false;
         historySection.hidden = false;
@@ -183,6 +688,15 @@
             progress.textContent =
               names[item.state] || item.state.replaceAll("_", " ");
             row.append(title, progress);
+            if (
+              item.draft_sha256 ||
+              (item.source_kind === "audio" && item.source_asset_id)
+            ) {
+              const review = document.createElement("button");
+              review.textContent = "Play / view transcript";
+              review.addEventListener("click", () => void openReview(item));
+              row.append(review);
+            }
             if (item.safe_error_code) {
               const issue = document.createElement("span");
               issue.className = "history-status";
@@ -275,7 +789,9 @@
         .mode()
         .then((value) => {
           document.querySelector("#magic-link-controls").hidden =
-            value.provider === "entra";
+            value.provider !== "magic_link";
+          document.querySelector("#password-login-hint").hidden =
+            value.provider !== "dev_password";
         })
         .catch(showError);
       document.querySelector("#open-login").addEventListener("click", () => {
@@ -310,6 +826,7 @@
         refreshMeetings().catch(showError),
       );
       meetings.addEventListener("change", () => {
+        closeReview();
         controls.hidden = true;
         historySection.hidden = true;
         window.vereloDesktop.meetings.clear().catch(showError);
@@ -357,7 +874,42 @@
       window.vereloDesktop.capture.mode().then((value) => {
         captureAdapter = value.adapter;
       });
+      window.vereloDesktop.capture.onRemoteState(async (value) => {
+        try {
+          if (value.documentId && value.action === "start") {
+            await setSelectedMeeting(value.documentId);
+            startedAt = Date.now();
+            setRecordingActive(true);
+          } else if (value.action === "stop") {
+            setRecordingActive(false);
+            status.textContent =
+              "Recording stopped. Recall upload and transcription will continue in the background.";
+            void refreshProgress();
+          }
+          show(await window.vereloDesktop.capture.current());
+        } catch (error) {
+          showError(error);
+        }
+      });
       refreshAuth().catch(showError);
+      const refreshRecorderConnection = async () => {
+        const value = await window.vereloDesktop.capture.connection();
+        if (value.status === "online") {
+          recorderConnection.textContent = "Web recording controls connected.";
+        } else if (value.status === "sign_in_required") {
+          recorderConnection.textContent =
+            "Sign in to this desktop app to enable web recording controls.";
+        } else if (value.status === "disabled") {
+          recorderConnection.textContent =
+            "Web controls require Recall desktop capture mode.";
+        } else if (value.status === "error") {
+          recorderConnection.textContent = `Web controls unavailable at ${value.stage || "connection"} (${value.code || "connection_failed"}).`;
+        }
+      };
+      void refreshRecorderConnection();
+      window.setInterval(() => {
+        void refreshRecorderConnection().catch(() => undefined);
+      }, 3000);
       const refreshProgress = async () => {
         const value = await window.vereloDesktop.capture.progress();
         processing.textContent = value

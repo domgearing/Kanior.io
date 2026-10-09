@@ -21,6 +21,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/dev-password/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a local/test one-time password without disclosing account eligibility */
+        post: operations["request_development_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/dev-password/consume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Consume an email-bound local/test one-time password */
+        post: operations["consume_development_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/magic-link/request": {
         parameters: {
             query?: never;
@@ -299,6 +333,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestions/{ingestion_id}/word-alignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read exact provider word timing only when it matches the current transcript */
+        get: operations["get_transcript_word_alignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingestions/{ingestion_id}/approvals": {
         parameters: {
             query?: never;
@@ -418,6 +469,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/source-assets/{source_asset_id}/waveform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a compact waveform for an authorized original audio source */
+        get: operations["get_source_asset_waveform"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/capture-sessions": {
         parameters: {
             query?: never;
@@ -429,6 +497,108 @@ export interface paths {
         put?: never;
         /** Create a persistent recording session */
         post: operations["create_capture_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recorder-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the signed-in employee's desktop recorders */
+        get: operations["list_recorder_devices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recorder-devices/{device_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Report local recorder state */
+        put: operations["heartbeat_recorder_device"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recorder-devices/{device_id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an authorized desktop capture action */
+        post: operations["create_recorder_command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recorder-devices/{device_id}/commands/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim the next short-lived desktop command */
+        post: operations["poll_recorder_command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recorder-commands/{command_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the safe command result */
+        get: operations["get_recorder_command"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recorder-commands/{command_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report the desktop action result */
+        post: operations["complete_recorder_command"];
         delete?: never;
         options?: never;
         head?: never;
@@ -576,7 +746,7 @@ export interface components {
              * Provider
              * @enum {string}
              */
-            provider: "magic_link" | "entra";
+            provider: "dev_password" | "magic_link" | "entra";
         };
         /** AuthenticationResult */
         AuthenticationResult: {
@@ -700,6 +870,26 @@ export interface components {
              * @enum {string}
              */
             reason_code: "transcription_correction" | "speaker_correction" | "formatting_correction" | "other_reviewed";
+        };
+        /** DevelopmentPasswordConsume */
+        DevelopmentPasswordConsume: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** DevelopmentPasswordRequestAccepted */
+        DevelopmentPasswordRequestAccepted: {
+            /**
+             * Status
+             * @constant
+             */
+            status: "accepted";
+            /**
+             * Message
+             * @constant
+             */
+            message: "If eligible, a one-time password is in the local mailbox.";
         };
         /** Document */
         Document: {
@@ -1195,6 +1385,127 @@ export interface components {
              */
             transcript_version_id: string;
         };
+        /** RecorderCommand */
+        RecorderCommand: {
+            /**
+             * Command Id
+             * Format: uuid
+             */
+            command_id: string;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "start" | "pause" | "resume" | "stop";
+            /** Document Id */
+            document_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed" | "expired";
+            /** Safe Error Code */
+            safe_error_code: ("capture_failed" | "session_expired" | "recorder_unavailable" | "permission_revoked") | null;
+        };
+        /** RecorderCommandCreate */
+        RecorderCommandCreate: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "start" | "pause" | "resume" | "stop";
+            /**
+             * Document Id
+             * @default null
+             */
+            document_id: string | null;
+            /**
+             * Operation Key
+             * Format: uuid
+             */
+            operation_key: string;
+        };
+        /** RecorderCommandPoll */
+        RecorderCommandPoll: {
+            command: components["schemas"]["RecorderCommand"] | null;
+        };
+        /** RecorderCommandResult */
+        RecorderCommandResult: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "failed";
+            /**
+             * Capture Session Id
+             * @default null
+             */
+            capture_session_id: string | null;
+            /**
+             * Safe Error Code
+             * @default null
+             */
+            safe_error_code: ("capture_failed" | "session_expired" | "recorder_unavailable" | "permission_revoked") | null;
+        };
+        /** RecorderDevice */
+        RecorderDevice: {
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Online */
+            online: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "created" | "recording" | "paused" | "interrupted" | "finalizing" | "uploading" | "complete" | "failed" | "aborted";
+            /** Document Id */
+            document_id: string | null;
+            /** Capture Session Id */
+            capture_session_id: string | null;
+        };
+        /** RecorderDevicePage */
+        RecorderDevicePage: {
+            /** Items */
+            items: components["schemas"]["RecorderDevice"][];
+            /**
+             * Next Cursor
+             * @default null
+             */
+            next_cursor: null;
+        };
+        /** RecorderHeartbeat */
+        RecorderHeartbeat: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "created" | "recording" | "paused" | "interrupted" | "finalizing" | "uploading" | "complete" | "failed" | "aborted";
+            /**
+             * Document Id
+             * @default null
+             */
+            document_id: string | null;
+            /**
+             * Capture Session Id
+             * @default null
+             */
+            capture_session_id: string | null;
+        };
+        /** SegmentWordAlignment */
+        SegmentWordAlignment: {
+            /** Index */
+            index: number;
+            /** Words */
+            words: components["schemas"]["TimedWord"][];
+        };
         /** SelectedSpan */
         SelectedSpan: {
             /**
@@ -1223,6 +1534,31 @@ export interface components {
             /** Content Base64 */
             content_base64: string;
         };
+        /** SourceAssetWaveform */
+        SourceAssetWaveform: {
+            /**
+             * Source Asset Id
+             * Format: uuid
+             */
+            source_asset_id: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Peaks */
+            peaks: number[];
+        };
+        /** TimedWord */
+        TimedWord: {
+            /** Text */
+            text: string;
+            /** Start Ms */
+            start_ms: number;
+            /** End Ms */
+            end_ms: number;
+            /** Start Character */
+            start_character: number;
+            /** End Character */
+            end_character: number;
+        };
         /** TranscriptApprovalCreate */
         TranscriptApprovalCreate: {
             /** Content Sha256 */
@@ -1241,14 +1577,14 @@ export interface components {
              * Format
              * @enum {string}
              */
-            format: "txt" | "md" | "json";
+            format: "txt" | "md" | "json" | "pdf";
             /** Filename */
             filename: string;
             /**
              * Media Type
              * @enum {string}
              */
-            media_type: "text/plain; charset=utf-8" | "text/markdown; charset=utf-8" | "application/json";
+            media_type: "text/plain; charset=utf-8" | "text/markdown; charset=utf-8" | "application/json" | "application/pdf";
             /** Content Base64 */
             content_base64: string;
             /** Sha256 */
@@ -1437,6 +1773,22 @@ export interface components {
             start_ms: number;
             end_ms: number;
         };
+        /** TranscriptWordAlignment */
+        TranscriptWordAlignment: {
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            /** Available */
+            available: boolean;
+            /** Matches Current Draft */
+            matches_current_draft: boolean;
+            /** Source Segments */
+            source_segments: components["schemas"]["TranscriptSegment"][];
+            /** Segments */
+            segments: components["schemas"]["SegmentWordAlignment"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -1465,6 +1817,284 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthenticationMode"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    request_development_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevelopmentPasswordRequestAccepted"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    consume_development_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevelopmentPasswordConsume"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationResult"];
                 };
             };
             /** @description unauthenticated */
@@ -4660,6 +5290,143 @@ export interface operations {
             };
         };
     };
+    get_transcript_word_alignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ingestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptWordAlignment"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     approve_transcript_draft: {
         parameters: {
             query?: never;
@@ -5648,6 +6415,143 @@ export interface operations {
             };
         };
     };
+    get_source_asset_waveform: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceAssetWaveform"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     create_capture_session: {
         parameters: {
             query?: never;
@@ -5675,6 +6579,851 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaptureSession"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    list_recorder_devices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecorderDevicePage"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    heartbeat_recorder_device: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+                "X-Recorder-Device-Token": string;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecorderHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecorderDevice"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    create_recorder_command: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecorderCommandCreate"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Relative API URL of created resource */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecorderCommand"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    poll_recorder_command: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+                "X-Recorder-Device-Token": string;
+            };
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecorderCommandPoll"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_recorder_command: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                command_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecorderCommand"];
+                };
+            };
+            /** @description unauthenticated */
+            401: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description forbidden */
+            403: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description conflict */
+            409: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large */
+            413: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_input */
+            422: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description rate_limited */
+            429: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description internal_error */
+            500: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description dependency_unavailable */
+            503: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    /** @description Required when retryable; delay in seconds */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    complete_recorder_command: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+                "X-Recorder-Device-Token": string;
+            };
+            path: {
+                command_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecorderCommandResult"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description Server request identifier */
+                    "X-Request-ID"?: string;
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecorderCommand"];
                 };
             };
             /** @description unauthenticated */

@@ -24,10 +24,23 @@ contextBridge.exposeInMainWorld("vereloDesktop", {
     select: (documentId: string) =>
       ipcRenderer.invoke("meetings:select", documentId),
     history: () => ipcRenderer.invoke("meetings:history"),
+    review: (ingestionId: string) =>
+      ipcRenderer.invoke("meetings:review", ingestionId),
+    audio: (ingestionId: string) =>
+      ipcRenderer.invoke("meetings:audio", ingestionId),
+    waveform: (ingestionId: string) =>
+      ipcRenderer.invoke("meetings:waveform", ingestionId),
     retry: (ingestionId: string) =>
       ipcRenderer.invoke("meetings:retry", ingestionId),
   },
   capture: {
+    connection: () => ipcRenderer.invoke("recorder:connection"),
+    onRemoteState: (
+      callback: (value: { action: string; documentId: string | null }) => void,
+    ) =>
+      ipcRenderer.on("capture:remote-state", (_event, value) =>
+        callback(value),
+      ),
     mode: () => ipcRenderer.invoke("capture:mode"),
     current: () => ipcRenderer.invoke("capture:current"),
     progress: () => ipcRenderer.invoke("capture:progress"),

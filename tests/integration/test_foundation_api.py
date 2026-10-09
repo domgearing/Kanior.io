@@ -224,12 +224,22 @@ def test_foundation_api_authorized_flow_and_guessed_id_denial(monkeypatch) -> No
             assert client.get(f"/api/v1/documents/{document_id}/ingestions").json()["items"]
             source = client.get(f"/api/v1/source-assets/{publication['source_asset_id']}/content")
             assert base64.b64decode(source.json()["content_base64"]) == synthetic_text
-            for format_name in ("txt", "md", "json"):
+            assert (
+                client.get(
+                    f"/api/v1/source-assets/{publication['source_asset_id']}/waveform"
+                ).status_code
+                == 404
+            )
+            alignment = client.get(f"/api/v1/ingestions/{ingestion_id}/word-alignment")
+            assert alignment.status_code == 200
+            assert alignment.json()["available"] is False
+            for format_name in ("txt", "md", "json", "pdf"):
                 download = client.get(
                     f"/api/v1/documents/{document_id}/transcript-downloads/{format_name}"
                 )
                 assert download.status_code == 200
-                assert base64.b64decode(download.json()["content_base64"])
+                content = base64.b64decode(download.json()["content_base64"])
+                assert content.startswith(b"%PDF-") if format_name == "pdf" else bool(content)
             assert client.get(f"/api/v1/documents/{document_id}").status_code == 200
             assert client.get(f"/api/v1/projects/{project_id}/documents").json()["items"]
             current["session"] = synthetic_session(
@@ -244,6 +254,25 @@ def test_foundation_api_authorized_flow_and_guessed_id_denial(monkeypatch) -> No
             assert client.get(f"/api/v1/projects/{project_id}").status_code == 404
             assert (
                 client.get(f"/api/v1/documents/{document_id}/transcript-publication").status_code
+                == 404
+            )
+            assert (
+                client.get(f"/api/v1/ingestions/{ingestion_id}/word-alignment").status_code == 404
+            )
+            assert (
+                client.get(f"/api/v1/documents/{document_id}/transcript-downloads/pdf").status_code
+                == 404
+            )
+            assert (
+                client.get(
+                    f"/api/v1/source-assets/{publication['source_asset_id']}/content"
+                ).status_code
+                == 404
+            )
+            assert (
+                client.get(
+                    f"/api/v1/source-assets/{publication['source_asset_id']}/waveform"
+                ).status_code
                 == 404
             )
             current["session"] = synthetic_session(

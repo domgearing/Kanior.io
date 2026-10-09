@@ -45,10 +45,11 @@ From Git Bash:
 python scripts/provision-local-employee.py --email you@example.invalid --display-name "Local Employee" --allow-project-creation
 ```
 
-After provisioning, request a link on the web sign-in page. The synthetic delivery adapter writes
-the latest link to `.artifacts/dev-mailbox/latest.json`. Open that link in the same browser. Requests
-for unknown or disabled addresses return the same message and produce no mail. Links expire after ten
-minutes and can be used once. Never enable this adapter for confidential, staging, or production use.
+After provisioning, choose **Get one-time password** on the web sign-in page. The synthetic local
+delivery adapter writes the password to `.artifacts/dev-mailbox/latest.json`. Enter that password
+with the same email on the sign-in page. Requests for unknown or disabled addresses return the same
+message and produce no credential. Passwords expire after ten minutes and can be used once. Never
+enable this adapter for confidential, staging, or production use.
 
 An opt-in Microsoft Graph mail adapter is available for an isolated development/test tenant. Follow
 [the Graph Mail setup guide](docs/integrations/microsoft-graph-mail.md), then select
@@ -129,6 +130,11 @@ Stop local services without deleting the database volume:
 ```
 
 ## Standard commands
+
+For a single-user local runtime that does not depend on a terminal, follow the
+[local release guide](docs/LOCAL_RELEASE.md). It builds static web assets, supervises the API and
+worker without Uvicorn reload, and installs optional Windows sign-in tasks. The existing
+`live-test-run.sh` remains the attended development path.
 
 | Task                                           | Command                           |
 | ---------------------------------------------- | --------------------------------- |

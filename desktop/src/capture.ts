@@ -2,13 +2,15 @@ import { randomUUID } from "node:crypto";
 
 export type CaptureState =
   | "idle"
+  | "created"
   | "recording"
   | "paused"
   | "interrupted"
   | "finalizing"
   | "uploading"
   | "complete"
-  | "failed";
+  | "failed"
+  | "aborted";
 
 export interface RecordingGap {
   startMs: number;

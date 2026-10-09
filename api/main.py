@@ -17,6 +17,7 @@ from api.foundation_routes import create_foundation_router
 from api.identity_routes import create_identity_router
 from api.ingestion_routes import create_ingestion_router
 from api.recall_routes import create_recall_router
+from api.recorder_control_routes import create_recorder_control_router
 from connectors.live_runtime import create_live_storage
 from connectors.local_magic_link import LocalMagicLinkDelivery
 from connectors.microsoft_entra import EntraAuthorizationCodeAdapter
@@ -27,6 +28,7 @@ from domain.capture import CaptureService
 from domain.errors import DomainError
 from domain.foundation import FoundationService
 from domain.identity import IdentityProvider, MagicLinkDelivery, MagicLinkIdentityProvider
+from domain.recorder_control import RecorderControlService
 from domain.workflow import IngestionWorkflowService
 
 
@@ -49,9 +51,10 @@ def create_app(
             allow_origins=[app.state.public_origin],
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT"],
-            allow_headers=["Content-Type", "X-CSRF-Token"],
+            allow_headers=["Content-Type", "X-CSRF-Token", "X-Recorder-Device-Token"],
         )
     entra_provider: EntraAuthorizationCodeAdapter | None = None
+    dev_password_provider: MagicLinkIdentityProvider | None = None
     if identity_provider is None and settings.identity_provider is IdentityProviderMode.ENTRA:
         assert settings.entra_tenant_id is not None
         assert settings.entra_client_id is not None
@@ -89,7 +92,18 @@ def create_app(
             app.state.engine,
             delivery,
             str(settings.magic_link_base_url),
+            password_delivery=(
+                delivery
+                if isinstance(delivery, LocalMagicLinkDelivery)
+                and settings.environment.value in {"local", "test"}
+                else None
+            ),
         )
+        if isinstance(delivery, LocalMagicLinkDelivery) and settings.environment.value in {
+            "local",
+            "test",
+        }:
+            dev_password_provider = identity_provider
 
     @app.middleware("http")
     async def response_boundaries(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -135,6 +149,7 @@ def create_app(
             identity_provider,
             cookie_secure=settings.session_cookie_secure,
             entra_provider=entra_provider,
+            dev_password_provider=dev_password_provider,
         )
     )
     live_storage = (
@@ -148,6 +163,7 @@ def create_app(
     )
     capture_service = CaptureService(app.state.engine, settings.object_storage_root)
     app.include_router(create_capture_router(capture_service, workflow))
+    app.include_router(create_recorder_control_router(RecorderControlService(app.state.engine)))
     if settings.integrations_mode.value == "live":
         if not (
             settings.recall_api_base_url

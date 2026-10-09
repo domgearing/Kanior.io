@@ -78,6 +78,13 @@ class CaptureService:
     ) -> CaptureSession:
         project_id = self._resolve_project(context, capture_id)
         with scoped_transaction(self._engine, context, project_id) as connection:
+            role = connection.execute(
+                text("""SELECT role FROM project_memberships
+                  WHERE project_id=:project AND user_id=:actor AND enabled"""),
+                {"project": project_id, "actor": context.principal_id},
+            ).scalar_one_or_none()
+            if role not in {"contributor", "project_owner"}:
+                raise FORBIDDEN
             row = (
                 connection.execute(
                     text("SELECT * FROM capture_sessions WHERE id=:id FOR UPDATE"),

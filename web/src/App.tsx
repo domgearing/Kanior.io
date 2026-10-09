@@ -1,9 +1,12 @@
+import { Brand } from "./Brand";
 import { useCallback, useEffect, useState } from "react";
 
 import { resolvePreviewLocation } from "./app-state";
 import { ConnectedApp } from "./ConnectedApp";
 
-const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+const apiBase =
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin);
 
 type View = "transcript" | "cleanup" | "source";
 type Page = "home" | "project";
@@ -136,11 +139,14 @@ export function App() {
 }
 
 function AuthenticatedApp() {
-  const [authMode, setAuthMode] = useState<"magic_link" | "entra" | null>(null);
+  const [authMode, setAuthMode] = useState<
+    "dev_password" | "magic_link" | "entra" | null
+  >(null);
   const [status, setStatus] = useState<"checking" | "signed-out" | "signed-in">(
     "checking",
   );
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const handleSignedOut = useCallback(() => setStatus("signed-out"), []);
 
@@ -152,7 +158,7 @@ function AuthenticatedApp() {
       const modeResponse = await fetch(`${apiBase}/api/v1/auth/mode`);
       if (!modeResponse.ok) throw new Error("auth_mode_unavailable");
       const mode = (await modeResponse.json()) as {
-        provider: "magic_link" | "entra";
+        provider: "dev_password" | "magic_link" | "entra";
       };
       setAuthMode(mode.provider);
       if (window.location.search.includes("sign_in_error=1")) {
@@ -218,12 +224,100 @@ function AuthenticatedApp() {
       setMessage("The Verelo API is unavailable.");
     }
   };
+  const requestPassword = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    if (
+      !event.currentTarget.form
+        ?.querySelector<HTMLInputElement>("#employee-email")
+        ?.reportValidity()
+    )
+      return;
+    setMessage("");
+    setPassword("");
+    try {
+      const response = await fetch(
+        `${apiBase}/api/v1/auth/dev-password/request`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        },
+      );
+      setMessage(
+        response.ok
+          ? "If this employee account is enabled, a one-time password is in the local development mailbox."
+          : "The password request could not be accepted.",
+      );
+    } catch {
+      setMessage("The Verelo API is unavailable.");
+    }
+  };
+  const signInWithPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setMessage("");
+    try {
+      const response = await fetch(
+        `${apiBase}/api/v1/auth/dev-password/consume`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        },
+      );
+      if (!response.ok) {
+        setMessage(
+          "That email or one-time password is invalid or has expired.",
+        );
+        return;
+      }
+      setPassword("");
+      setStatus("signed-in");
+    } catch {
+      setMessage("The Verelo API is unavailable.");
+    }
+  };
   return (
     <main className="auth-page">
+      <aside className="auth-story" aria-label="About Verelo">
+        <span className="auth-eyebrow">Your research, in focus</span>
+        <h2>
+          Every conversation.
+          <br />A clearer perspective.
+        </h2>
+        <p>
+          Bring your interviews together. Review transcripts, keep the source in
+          sight, and build on what was actually said.
+        </p>
+        <ol className="auth-steps">
+          <li>
+            <span>01</span>
+            <div>
+              <strong>Capture the conversation</strong>
+              <p>Record a call or import a transcript.</p>
+            </div>
+          </li>
+          <li>
+            <span>02</span>
+            <div>
+              <strong>Review with context</strong>
+              <p>Read, listen, and prepare your transcript.</p>
+            </div>
+          </li>
+          <li>
+            <span>03</span>
+            <div>
+              <strong>Keep your research organized</strong>
+              <p>One shared workspace for each project.</p>
+            </div>
+          </li>
+        </ol>
+        <small>Verelo · Transcript intelligence</small>
+      </aside>
       <section className="auth-card">
-        <div className="brand">
-          <span>K</span>Verelo
-        </div>
+        <Brand />
         <small>Employee access</small>
         <h1>Sign in to your workspace</h1>
         {authMode === "entra" ? (
@@ -237,6 +331,45 @@ function AuthenticatedApp() {
             >
               Sign in with Microsoft
             </button>
+          </>
+        ) : authMode === "dev_password" ? (
+          <>
+            <p>
+              Use an approved employee email. Request a one-time password, then
+              copy it from the local development mailbox. It expires after 10
+              minutes.
+            </p>
+            <form onSubmit={(event) => void signInWithPassword(event)}>
+              <label htmlFor="employee-email">Work email</label>
+              <input
+                id="employee-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="employee@example.com"
+              />
+              <label htmlFor="employee-password">One-time password</label>
+              <input
+                id="employee-password"
+                type="password"
+                required
+                autoComplete="one-time-code"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button className="button primary" type="submit">
+                Sign in
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={(event) => void requestPassword(event)}
+              >
+                Get one-time password
+              </button>
+            </form>
           </>
         ) : (
           <>
@@ -269,7 +402,9 @@ function AuthenticatedApp() {
         <footer>
           {authMode === "entra"
             ? "Company employee access"
-            : "Development magic link · No public signup"}
+            : authMode === "dev_password"
+              ? "Local development only · No public signup"
+              : "Development magic link · No public signup"}
         </footer>
       </section>
     </main>
@@ -337,9 +472,7 @@ export function ProductApp({ onSignedOut }: { onSignedOut: () => void }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <span>K</span>Verelo
-        </div>
+        <Brand />
         <nav>
           <button
             className={page === "home" ? "active" : ""}

@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -33,6 +33,21 @@ const recallEnabled =
 let client: CaptureApiClient | null = null;
 let selectedDocumentId: string | null = null;
 let loginWindow: BrowserWindow | null = null;
+type RecorderConnectionStatus = {
+  status: "connecting" | "online" | "sign_in_required" | "error" | "disabled";
+  stage?: "recovery" | "heartbeat" | "claim" | "capture_action";
+  code?: string;
+};
+let recorderConnection: RecorderConnectionStatus = {
+  status: recallEnabled ? "connecting" : "disabled",
+};
+
+function safeRecorderError(error: unknown): string {
+  if (error instanceof Error && /^verelo_api_[0-9]{3}$/.test(error.message)) {
+    return error.message;
+  }
+  return "connection_failed";
+}
 
 function expireSession(): void {
   client = null;
@@ -46,6 +61,7 @@ async function apiRequest(
   pathname: string,
   method = "GET",
   body?: object,
+  deviceToken?: string,
 ): Promise<Record<string, unknown>> {
   const response = await session.defaultSession.fetch(`${apiBase}${pathname}`, {
     method,
@@ -53,6 +69,7 @@ async function apiRequest(
     headers: {
       "Content-Type": "application/json",
       Origin: publicOrigin,
+      ...(deviceToken ? { "X-Recorder-Device-Token": deviceToken } : {}),
       ...(method === "GET" ? {} : { "X-CSRF-Token": await csrf() }),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -227,6 +244,69 @@ ipcMain.handle("meetings:history", async () => {
   );
   return response.items;
 });
+ipcMain.handle("meetings:review", async (_event, ingestionId: unknown) => {
+  if (
+    !selectedDocumentId ||
+    typeof ingestionId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(ingestionId)
+  )
+    throw new Error("invalid_ingestion_id");
+  const page = await apiRequest(
+    `/api/v1/documents/${selectedDocumentId}/ingestions`,
+  );
+  const items = page.items as Array<Record<string, unknown>>;
+  const selected = items.find((item) => item.ingestion_id === ingestionId);
+  if (!selected) throw new Error("ingestion_not_in_selected_meeting");
+  const draft = await apiRequest(`/api/v1/ingestions/${ingestionId}/draft`);
+  const alignment = await apiRequest(
+    `/api/v1/ingestions/${ingestionId}/word-alignment`,
+  );
+  return { ingestion: selected, draft, alignment };
+});
+ipcMain.handle("meetings:audio", async (_event, ingestionId: unknown) => {
+  if (
+    !selectedDocumentId ||
+    typeof ingestionId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(ingestionId)
+  )
+    throw new Error("invalid_ingestion_id");
+  const page = await apiRequest(
+    `/api/v1/documents/${selectedDocumentId}/ingestions`,
+  );
+  const items = page.items as Array<Record<string, unknown>>;
+  const selected = items.find(
+    (item) =>
+      item.ingestion_id === ingestionId &&
+      item.source_kind === "audio" &&
+      typeof item.source_asset_id === "string",
+  );
+  if (!selected) throw new Error("audio_not_in_selected_meeting");
+  return apiRequest(
+    `/api/v1/source-assets/${selected.source_asset_id}/content`,
+  );
+});
+ipcMain.handle("meetings:waveform", async (_event, ingestionId: unknown) => {
+  if (
+    !selectedDocumentId ||
+    typeof ingestionId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(ingestionId)
+  )
+    throw new Error("invalid_ingestion_id");
+  const page = await apiRequest(
+    `/api/v1/documents/${selectedDocumentId}/ingestions`,
+  );
+  const items = page.items as Array<Record<string, unknown>>;
+  const selected = items.find(
+    (item) =>
+      item.ingestion_id === ingestionId &&
+      item.source_kind === "audio" &&
+      typeof item.source_asset_id === "string",
+  );
+  if (!selected) throw new Error("audio_not_in_selected_meeting");
+  return apiRequest(
+    `/api/v1/source-assets/${selected.source_asset_id}/waveform`,
+  );
+});
 ipcMain.handle("meetings:retry", async (_event, ingestionId: unknown) => {
   if (
     !selectedDocumentId ||
@@ -254,6 +334,11 @@ let captureSessionId: string | null = null;
 let nextSequence = 1;
 let recallWindowId: string | null = null;
 let recallInitialized = false;
+let activeDocumentId: string | null = null;
+let recorderState: CaptureSnapshot["state"] | "idle" = "idle";
+let captureStartedAt = 0;
+let remoteTickBusy = false;
+let captureActionBusy = false;
 
 async function initializeRecall(): Promise<void> {
   if (!recallEnabled || !recallApiUrl || recallInitialized) return;
@@ -288,10 +373,37 @@ function recoveryPath(): string {
   return path.join(app.getPath("userData"), "active-capture.json");
 }
 
+function recorderDeviceId(): string {
+  const location = path.join(app.getPath("userData"), "recorder-device-id");
+  if (existsSync(location)) {
+    const value = readFileSync(location, "utf8").trim();
+    if (/^[0-9a-f-]{36}$/i.test(value)) return value;
+  }
+  const value = randomUUID();
+  writeFileSync(location, value, { encoding: "utf8", mode: 0o600 });
+  return value;
+}
+
+function recorderDeviceToken(): string {
+  const location = path.join(app.getPath("userData"), "recorder-device-token");
+  if (existsSync(location)) {
+    const value = readFileSync(location, "utf8").trim();
+    if (/^[0-9a-f]{64}$/.test(value)) return value;
+  }
+  const value = randomBytes(32).toString("hex");
+  writeFileSync(location, value, { encoding: "utf8", mode: 0o600 });
+  return value;
+}
+
 function persistRecovery(): void {
   writeFileSync(
     recoveryPath(),
-    JSON.stringify({ captureSessionId, nextSequence }),
+    JSON.stringify({
+      captureSessionId,
+      nextSequence,
+      activeDocumentId,
+      captureStartedAt,
+    }),
     {
       encoding: "utf8",
       mode: 0o600,
@@ -309,6 +421,10 @@ function loadRecovery(): void {
     >;
     if (typeof value.captureSessionId === "string")
       captureSessionId = value.captureSessionId;
+    if (typeof value.activeDocumentId === "string")
+      activeDocumentId = value.activeDocumentId;
+    if (typeof value.captureStartedAt === "number")
+      captureStartedAt = value.captureStartedAt;
     if (
       Number.isSafeInteger(value.nextSequence) &&
       Number(value.nextSequence) > 0
@@ -323,16 +439,11 @@ function loadRecovery(): void {
 
 async function current(): Promise<CaptureSnapshot> {
   if (!client || !captureSessionId) return synthetic.current();
-  try {
-    const state = await client.recover(captureSessionId);
-    nextSequence = state.acknowledgedChunks + 1;
-    persistRecovery();
-    return state;
-  } catch {
-    captureSessionId = null;
-    nextSequence = 1;
-    return synthetic.current();
-  }
+  const state = await client.recover(captureSessionId);
+  nextSequence = state.acknowledgedChunks + 1;
+  recorderState = state.state;
+  persistRecovery();
+  return state;
 }
 
 ipcMain.handle("capture:mode", () => ({
@@ -340,6 +451,7 @@ ipcMain.handle("capture:mode", () => ({
   configuredDocumentId: selectedDocumentId,
   adapter: recallEnabled ? "recall_desktop" : "synthetic",
 }));
+ipcMain.handle("recorder:connection", () => recorderConnection);
 ipcMain.handle("capture:current", () => current());
 ipcMain.handle("capture:progress", async () => {
   if (!client || !captureSessionId) return null;
@@ -352,25 +464,51 @@ ipcMain.handle("capture:progress", async () => {
     };
   return client.transcriptionProgress(capture.ingestionId);
 });
-ipcMain.handle("capture:create", async () => {
+async function createCapture(): Promise<CaptureSnapshot> {
   if (!client || !selectedDocumentId)
     throw new Error("sign_in_and_select_meeting_first");
+  if (["recording", "paused", "interrupted"].includes(recorderState))
+    throw new Error("capture_already_active");
+  if (
+    recorderState === "created" &&
+    captureSessionId &&
+    activeDocumentId === selectedDocumentId
+  ) {
+    return client.recover(captureSessionId);
+  }
   const state = await client.create(selectedDocumentId);
   captureSessionId = state.captureSessionId;
+  activeDocumentId = selectedDocumentId;
+  recorderState = state.state;
   nextSequence = 1;
   persistRecovery();
   return state;
-});
-ipcMain.handle(
-  "capture:dispatch",
-  async (_event, action: unknown, atMs: unknown) => {
+}
+ipcMain.handle("capture:create", () => createCapture());
+
+async function dispatchCapture(
+  action: unknown,
+  atMs: unknown,
+): Promise<CaptureSnapshot> {
+  if (captureActionBusy) throw new Error("capture_action_in_progress");
+  captureActionBusy = true;
+  try {
     if (
       typeof action !== "string" ||
       (atMs !== undefined && typeof atMs !== "number")
     ) {
       throw new Error("invalid_capture_request");
     }
-    if (!client) throw new Error("sign_in_required");
+    if (!client) {
+      if (action === "stop" && recallEnabled && recallWindowId) {
+        await RecallAiSdk.stopRecording({ windowId: recallWindowId });
+        recallWindowId = null;
+        recorderState = "finalizing";
+        persistRecovery();
+        throw new Error("local_recording_stopped_sign_in_to_reconcile");
+      }
+      throw new Error("sign_in_required");
+    }
     if (!captureSessionId) throw new Error("capture_session_required");
     if (recallEnabled) {
       await initializeRecall();
@@ -382,18 +520,137 @@ ipcMain.handle(
           uploadToken: grant.uploadToken,
           disableRawMedia: true,
         });
+        captureStartedAt = Date.now();
+        recorderState = "recording";
+        persistRecovery();
       } else if (action === "pause" && recallWindowId) {
         await RecallAiSdk.pauseRecording({ windowId: recallWindowId });
+        recorderState = "paused";
       } else if (action === "resume" && recallWindowId) {
         await RecallAiSdk.resumeRecording({ windowId: recallWindowId });
+        recorderState = "recording";
       } else if (action === "stop" && recallWindowId) {
         await RecallAiSdk.stopRecording({ windowId: recallWindowId });
+        recallWindowId = null;
+        recorderState = "finalizing";
+        persistRecovery();
+      } else if (["pause", "resume", "stop"].includes(action)) {
+        throw new Error("recall_window_unavailable");
       }
     }
     const event = action === "complete" ? "upload" : action;
-    return client.transition(captureSessionId, event, atMs ?? 0);
-  },
+    const state = await client.transition(captureSessionId, event, atMs ?? 0);
+    recorderState = state.state;
+    persistRecovery();
+    return state;
+  } finally {
+    captureActionBusy = false;
+  }
+}
+ipcMain.handle("capture:dispatch", (_event, action: unknown, atMs: unknown) =>
+  dispatchCapture(action, atMs),
 );
+
+async function reportRecorderState(
+  deviceId: string,
+  deviceToken: string,
+): Promise<void> {
+  await apiRequest(
+    `/api/v1/recorder-devices/${deviceId}/heartbeat`,
+    "PUT",
+    {
+      state: recorderState,
+      document_id: activeDocumentId,
+      capture_session_id: captureSessionId,
+    },
+    deviceToken,
+  );
+}
+
+async function remoteControlTick(): Promise<void> {
+  if (!recallEnabled || remoteTickBusy) return;
+  remoteTickBusy = true;
+  let stage: RecorderConnectionStatus["stage"] = "recovery";
+  try {
+    if (!client && !(await authenticationStatus()).signedIn) {
+      recorderConnection = { status: "sign_in_required" };
+      return;
+    }
+    if (captureSessionId && recorderState === "idle" && client) {
+      const recovered = await client.recover(captureSessionId);
+      recorderState = recovered.state;
+    }
+    const deviceId = recorderDeviceId();
+    const deviceToken = recorderDeviceToken();
+    stage = "heartbeat";
+    await reportRecorderState(deviceId, deviceToken);
+    recorderConnection = { status: "online" };
+    stage = "claim";
+    const response = await apiRequest(
+      `/api/v1/recorder-devices/${deviceId}/commands/claim`,
+      "POST",
+      undefined,
+      deviceToken,
+    );
+    const command = response.command as Record<string, unknown> | null;
+    if (!command) return;
+    const commandId = command.command_id as string;
+    let actionSucceeded = false;
+    stage = "capture_action";
+    try {
+      const action = command.action as string;
+      if (action === "start") {
+        const documentId = command.document_id as string;
+        const document = await apiRequest(`/api/v1/documents/${documentId}`);
+        selectedDocumentId = document.document_id as string;
+        await createCapture();
+        await dispatchCapture("start", 0);
+      } else if (["pause", "resume", "stop"].includes(action)) {
+        if (!captureSessionId) throw new Error("capture_session_required");
+        await dispatchCapture(
+          action,
+          Math.max(0, Date.now() - captureStartedAt),
+        );
+      } else {
+        throw new Error("invalid_remote_action");
+      }
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send("capture:remote-state", {
+          action,
+          documentId: activeDocumentId,
+        });
+      }
+      actionSucceeded = true;
+    } catch (error) {
+      // The command result reports only a capture action failure, not a status-network failure.
+      recorderConnection = {
+        status: "error",
+        stage,
+        code: safeRecorderError(error),
+      };
+    }
+    await reportRecorderState(deviceId, deviceToken).catch(() => undefined);
+    await apiRequest(
+      `/api/v1/recorder-commands/${commandId}/result`,
+      "POST",
+      {
+        status: actionSucceeded ? "completed" : "failed",
+        capture_session_id: actionSucceeded ? captureSessionId : null,
+        safe_error_code: actionSucceeded ? null : "capture_failed",
+      },
+      deviceToken,
+    ).catch(() => undefined);
+  } catch (error) {
+    recorderConnection = {
+      status: "error",
+      stage,
+      code: safeRecorderError(error),
+    };
+    // The next heartbeat retries connection; no secrets or provider payloads enter logs.
+  } finally {
+    remoteTickBusy = false;
+  }
+}
 ipcMain.handle("capture:chunk", async (_event, contentBase64: unknown) => {
   if (typeof contentBase64 !== "string" || contentBase64.length === 0) {
     throw new Error("invalid_capture_chunk");
@@ -447,37 +704,51 @@ const createWindow = () => {
   void window.loadFile(path.join(__dirname, "renderer", "index.html"));
 };
 
-app.whenReady().then(() => {
-  app.setName(desktopApplicationName);
-  loadRecovery();
-  void initializeRecall().catch(() => undefined);
-  session.defaultSession.setDisplayMediaRequestHandler(
-    (_request, callback) => {
-      void desktopCapturer
-        .getSources({
-          types: ["screen", "window"],
-          thumbnailSize: { width: 0, height: 0 },
-        })
-        .then((sources) => {
-          const source = sources[0];
-          if (!source) return callback({});
-          callback({
-            video: source,
-            ...(process.platform === "win32"
-              ? { audio: "loopback" as const }
-              : {}),
-          });
-        })
-        .catch(() => callback({}));
-    },
-    { useSystemPicker: true },
-  );
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (!window) return;
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
   });
-});
+
+  void app.whenReady().then(() => {
+    app.setName(desktopApplicationName);
+    loadRecovery();
+    void initializeRecall().catch(() => undefined);
+    session.defaultSession.setDisplayMediaRequestHandler(
+      (_request, callback) => {
+        void desktopCapturer
+          .getSources({
+            types: ["screen", "window"],
+            thumbnailSize: { width: 0, height: 0 },
+          })
+          .then((sources) => {
+            const source = sources[0];
+            if (!source) return callback({});
+            callback({
+              video: source,
+              ...(process.platform === "win32"
+                ? { audio: "loopback" as const }
+                : {}),
+            });
+          })
+          .catch(() => callback({}));
+      },
+      { useSystemPicker: true },
+    );
+    createWindow();
+    void remoteControlTick();
+    setInterval(() => void remoteControlTick(), 3000);
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

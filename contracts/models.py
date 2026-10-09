@@ -96,6 +96,21 @@ class MagicLinkRequestAccepted(Contract):
     message: Literal["If the account is eligible, a sign-in link will be sent."]
 
 
+class DevelopmentPasswordRequestAccepted(Contract):
+    status: Literal["accepted"]
+    message: Literal["If eligible, a one-time password is in the local mailbox."]
+
+
+class DevelopmentPasswordConsume(Contract):
+    email: EmailAddress
+    password: Annotated[str, StringConstraints(min_length=32, max_length=256)]
+
+    @field_validator("email")
+    @classmethod
+    def plausible_email(cls, value: str) -> str:
+        return MagicLinkRequest.plausible_email(value)
+
+
 class MagicLinkConsume(Contract):
     token: Annotated[str, StringConstraints(min_length=32, max_length=256)]
 
@@ -105,7 +120,7 @@ class AuthenticationResult(Contract):
 
 
 class AuthenticationMode(Contract):
-    provider: Literal["magic_link", "entra"]
+    provider: Literal["dev_password", "magic_link", "entra"]
 
 
 class LogoutResult(Contract):
@@ -398,6 +413,33 @@ class TranscriptDraft(Contract):
     approval: DraftApproval | None = None
 
 
+class TimedWord(Contract):
+    text: Annotated[str, StringConstraints(min_length=1)]
+    start_ms: NonNegative
+    end_ms: NonNegative
+    start_character: NonNegative
+    end_character: Positive
+
+    @model_validator(mode="after")
+    def valid_range(self) -> "TimedWord":
+        if self.end_ms < self.start_ms or self.end_character <= self.start_character:
+            raise ValueError("word range is invalid")
+        return self
+
+
+class SegmentWordAlignment(Contract):
+    index: NonNegative
+    words: list[TimedWord]
+
+
+class TranscriptWordAlignment(Contract):
+    draft_id: UUID
+    available: bool
+    matches_current_draft: bool
+    source_segments: list[TranscriptSegment]
+    segments: list[SegmentWordAlignment]
+
+
 class CorrectedDraftPut(Contract):
     canonical_text: Annotated[str, StringConstraints(min_length=1, max_length=20_000_000)]
     expected_revision: Positive
@@ -425,10 +467,13 @@ class IngestionAction(Contract):
 
 
 class TranscriptDownload(Contract):
-    format: Literal["txt", "md", "json"]
+    format: Literal["txt", "md", "json", "pdf"]
     filename: Annotated[str, StringConstraints(min_length=1, max_length=520)]
     media_type: Literal[
-        "text/plain; charset=utf-8", "text/markdown; charset=utf-8", "application/json"
+        "text/plain; charset=utf-8",
+        "text/markdown; charset=utf-8",
+        "application/json",
+        "application/pdf",
     ]
     content_base64: str
     sha256: Sha256Digest
@@ -440,6 +485,14 @@ class SourceAssetContent(Contract):
     byte_length: Positive
     sha256: Sha256Digest
     content_base64: str
+
+
+class SourceAssetWaveform(Contract):
+    source_asset_id: UUID
+    duration_ms: Positive
+    peaks: Annotated[
+        list[Annotated[float, Field(ge=0, le=1)]], Field(min_length=320, max_length=320)
+    ]
 
 
 class TranscriptPublication(Contract):
@@ -459,6 +512,91 @@ class CaptureCreate(Contract):
     document_id: UUID
 
     @field_validator("document_id", mode="before")
+    @classmethod
+    def parse_json_uuid(cls, value: object) -> object:
+        if isinstance(value, str):
+            return UUID(value)
+        return value
+
+
+RecorderState = Literal[
+    "idle",
+    "created",
+    "recording",
+    "paused",
+    "interrupted",
+    "finalizing",
+    "uploading",
+    "complete",
+    "failed",
+    "aborted",
+]
+
+
+class RecorderHeartbeat(Contract):
+    state: RecorderState
+    document_id: UUID | None = None
+    capture_session_id: UUID | None = None
+
+    @field_validator("document_id", "capture_session_id", mode="before")
+    @classmethod
+    def parse_json_uuid(cls, value: object) -> object:
+        if isinstance(value, str):
+            return UUID(value)
+        return value
+
+
+class RecorderDevice(Contract):
+    device_id: UUID
+    online: bool
+    state: RecorderState
+    document_id: UUID | None
+    capture_session_id: UUID | None
+
+
+class RecorderDevicePage(Contract):
+    items: list[RecorderDevice]
+    next_cursor: None = None
+
+
+class RecorderCommandCreate(Contract):
+    action: Literal["start", "pause", "resume", "stop"]
+    document_id: UUID | None = None
+    operation_key: UUID
+
+    @field_validator("document_id", "operation_key", mode="before")
+    @classmethod
+    def parse_json_uuid(cls, value: object) -> object:
+        if isinstance(value, str):
+            return UUID(value)
+        return value
+
+
+class RecorderCommand(Contract):
+    command_id: UUID
+    device_id: UUID
+    action: Literal["start", "pause", "resume", "stop"]
+    document_id: UUID | None
+    status: Literal["pending", "running", "completed", "failed", "expired"]
+    safe_error_code: (
+        Literal["capture_failed", "session_expired", "recorder_unavailable", "permission_revoked"]
+        | None
+    )
+
+
+class RecorderCommandPoll(Contract):
+    command: RecorderCommand | None
+
+
+class RecorderCommandResult(Contract):
+    status: Literal["completed", "failed"]
+    capture_session_id: UUID | None = None
+    safe_error_code: (
+        Literal["capture_failed", "session_expired", "recorder_unavailable", "permission_revoked"]
+        | None
+    ) = None
+
+    @field_validator("capture_session_id", mode="before")
     @classmethod
     def parse_json_uuid(cls, value: object) -> object:
         if isinstance(value, str):
@@ -610,6 +748,8 @@ PUBLIC_MODELS = [
     Error,
     MagicLinkRequest,
     MagicLinkRequestAccepted,
+    DevelopmentPasswordRequestAccepted,
+    DevelopmentPasswordConsume,
     MagicLinkConsume,
     AuthenticationResult,
     AuthenticationMode,
@@ -634,17 +774,26 @@ PUBLIC_MODELS = [
     Ingestion,
     IngestionPage,
     TranscriptDraft,
+    TranscriptWordAlignment,
     CorrectedDraftPut,
     TranscriptApprovalCreate,
     TranscriptPublicationCreate,
     IngestionAction,
     TranscriptDownload,
     SourceAssetContent,
+    SourceAssetWaveform,
     CaptureCreate,
     CaptureSession,
     CaptureTransition,
     CaptureChunkUpload,
     CaptureFinalize,
+    RecorderHeartbeat,
+    RecorderDevice,
+    RecorderDevicePage,
+    RecorderCommandCreate,
+    RecorderCommand,
+    RecorderCommandPoll,
+    RecorderCommandResult,
 ]
 RESERVED_MODELS = [
     TranscriptImport,

@@ -16,11 +16,13 @@ from contracts.models import (
     IngestionFinalize,
     IngestionPage,
     SourceAssetContent,
+    SourceAssetWaveform,
     TranscriptApprovalCreate,
     TranscriptDownload,
     TranscriptDraft,
     TranscriptPublication,
     TranscriptPublicationCreate,
+    TranscriptWordAlignment,
 )
 from domain.workflow import IngestionWorkflowService
 
@@ -82,6 +84,16 @@ def create_ingestion_router(service: IngestionWorkflowService) -> APIRouter:
     )
     def get_transcript_draft(ingestion_id: UUID, session: SessionDep) -> TranscriptDraft:
         return service.get_draft(session.context, ingestion_id)
+
+    @router.get(
+        "/ingestions/{ingestion_id}/word-alignment",
+        response_model=TranscriptWordAlignment,
+        operation_id="get_transcript_word_alignment",
+    )
+    def get_transcript_word_alignment(
+        ingestion_id: UUID, session: SessionDep
+    ) -> TranscriptWordAlignment:
+        return service.word_alignment(session.context, ingestion_id)
 
     @router.put(
         "/ingestions/{ingestion_id}/draft",
@@ -167,5 +179,15 @@ def create_ingestion_router(service: IngestionWorkflowService) -> APIRouter:
     )
     def stream_source_asset(source_asset_id: UUID, session: SessionDep) -> SourceAssetContent:
         return service.source_content(session.context, source_asset_id)
+
+    @router.get(
+        "/source-assets/{source_asset_id}/waveform",
+        response_model=SourceAssetWaveform,
+        operation_id="get_source_asset_waveform",
+    )
+    def get_source_asset_waveform(
+        source_asset_id: UUID, session: SessionDep
+    ) -> SourceAssetWaveform:
+        return service.source_waveform(session.context, source_asset_id)
 
     return router

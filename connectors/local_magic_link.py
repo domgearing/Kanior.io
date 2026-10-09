@@ -13,15 +13,29 @@ class LocalMagicLinkDelivery:
         self._root = Path(root)
 
     def deliver(self, recipient: str, link: str, expires_at: str) -> None:
+        self._write(
+            {
+                "recipient": recipient,
+                "link": link,
+                "expires_at": expires_at,
+                "synthetic": True,
+            }
+        )
+
+    def deliver_password(self, recipient: str, password: str, expires_at: str) -> None:
+        self._write(
+            {
+                "recipient": recipient,
+                "password": password,
+                "expires_at": expires_at,
+                "synthetic": True,
+            }
+        )
+
+    def _write(self, payload: dict[str, str | bool]) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
         destination = self._root / "latest.json"
         temporary = self._root / f".{uuid4()}.tmp"
-        payload = {
-            "recipient": recipient,
-            "link": link,
-            "expires_at": expires_at,
-            "synthetic": True,
-        }
         temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         try:
             os.chmod(temporary, 0o600)

@@ -68,6 +68,7 @@ def test_allowlisted_magic_link_login_replay_logout_and_disable(monkeypatch, tmp
 
         app = create_app(api)
         with TestClient(app) as client:
+            assert client.get("/api/v1/auth/mode").json() == {"provider": "dev_password"}
             neutral = {
                 "status": "accepted",
                 "message": "If the account is eligible, a sign-in link will be sent.",
@@ -87,6 +88,82 @@ def test_allowlisted_magic_link_login_replay_logout_and_disable(monkeypatch, tmp
                 json={"email": email},
             )
             assert wrong_origin.status_code == 403
+
+            password_request = client.post(
+                "/api/v1/auth/dev-password/request",
+                headers={"Origin": origin},
+                json={"email": email.upper()},
+            )
+            assert password_request.status_code == 202
+            assert password_request.json() == {
+                "status": "accepted",
+                "message": "If eligible, a one-time password is in the local mailbox.",
+            }
+            password_mail = json.loads((mailbox / "latest.json").read_text(encoding="utf-8"))
+            assert password_mail["recipient"] == email
+            assert "link" not in password_mail
+            password = password_mail["password"]
+            assert len(password) >= 32
+            assert (
+                client.post(
+                    "/api/v1/auth/dev-password/request",
+                    headers={"Origin": origin},
+                    json={"email": "unknown@example.invalid"},
+                ).status_code
+                == 202
+            )
+            assert (
+                json.loads((mailbox / "latest.json").read_text(encoding="utf-8")) == password_mail
+            )
+            assert (
+                client.post(
+                    "/api/v1/auth/dev-password/consume",
+                    headers={"Origin": origin},
+                    json={"email": "wrong@example.invalid", "password": password},
+                ).status_code
+                == 401
+            )
+            assert (
+                client.post(
+                    "/api/v1/auth/dev-password/consume",
+                    headers={"Origin": origin},
+                    json={"email": email, "password": "x" * 32},
+                ).status_code
+                == 401
+            )
+            assert (
+                client.post(
+                    "/api/v1/auth/dev-password/consume",
+                    headers={"Origin": "https://attacker.invalid"},
+                    json={"email": email, "password": password},
+                ).status_code
+                == 403
+            )
+            assert (
+                client.post(
+                    "/api/v1/auth/dev-password/consume",
+                    headers={"Origin": origin},
+                    json={"email": email, "password": password},
+                ).status_code
+                == 200
+            )
+            assert client.get("/api/v1/me").status_code == 200
+            assert (
+                client.post(
+                    "/api/v1/auth/dev-password/consume",
+                    headers={"Origin": origin},
+                    json={"email": email, "password": password},
+                ).status_code
+                == 401
+            )
+            password_csrf = client.get("/api/v1/me").json()["csrf_token"]
+            assert (
+                client.post(
+                    "/api/v1/auth/logout",
+                    headers={"Origin": origin, "X-CSRF-Token": password_csrf},
+                ).status_code
+                == 200
+            )
 
             accepted = client.post(
                 "/api/v1/auth/magic-link/request",
@@ -138,6 +215,30 @@ def test_allowlisted_magic_link_login_replay_logout_and_disable(monkeypatch, tmp
                 ).status_code
                 == 200
             )
+            # Three requests above plus sign-ins and sign-outs must leave room
+            # for two more challenges; only accepted requests use quota.
+            for _ in range(2):
+                assert (
+                    client.post(
+                        "/api/v1/auth/dev-password/request",
+                        headers={"Origin": origin},
+                        json={"email": email},
+                    ).status_code
+                    == 202
+                )
+                issued = json.loads((mailbox / "latest.json").read_text(encoding="utf-8"))
+                assert issued["password"] != password
+                password = issued["password"]
+            for _ in range(2):
+                assert (
+                    client.post(
+                        "/api/v1/auth/dev-password/request",
+                        headers={"Origin": origin},
+                        json={"email": email},
+                    ).status_code
+                    == 202
+                )
+                assert json.loads((mailbox / "latest.json").read_text(encoding="utf-8")) == issued
             with admin.begin() as connection:
                 connection.execute(
                     text("UPDATE users SET enabled=false WHERE id=:id"), {"id": user}

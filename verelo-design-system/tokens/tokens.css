@@ -1,0 +1,189 @@
+/* Verelo design tokens. Generated from tokens.json. Light is the default; dark applies via [data-theme="dark"] or the OS setting. */
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('../fonts/PlusJakartaSans-Variable.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Manrope';
+  src: url('../fonts/Manrope-Variable.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Newsreader';
+  src: url('../fonts/Newsreader-Variable.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root, [data-theme="light"] {
+  --brand-navy: #0b1f33;
+  --brand-teal: #12a594;
+  --canvas: #f5f7f9;
+  --surface: #ffffff;
+  --surface-sunken: #edf1f4;
+  --brand-panel: #0b1f33;
+  --on-brand-panel: #ffffff;
+  --border: #dce3e8;
+  --border-strong: #7b8a97;
+  --ink: #0b1f33;
+  --ink-muted: #526375;
+  --accent: #12a594;
+  --accent-strong: #2bb9a7;
+  --accent-text: #0a7366;
+  --accent-soft: #d9f1ed;
+  --on-accent: #0b1f33;
+  --highlight: #fbe7a1;
+  --recording: #c8322b;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --brand-navy: #0b1f33;
+  --brand-teal: #12a594;
+  --canvas: #08141f;
+  --surface: #0f1f30;
+  --surface-sunken: #0b1926;
+  --brand-panel: #173350;
+  --on-brand-panel: #ffffff;
+  --border: #1e3246;
+  --border-strong: #62778b;
+  --ink: #e9eef3;
+  --ink-muted: #9caebf;
+  --accent: #12a594;
+  --accent-strong: #2bb9a7;
+  --accent-text: #3fcab8;
+  --accent-soft: #103a3d;
+  --on-accent: #0b1f33;
+  --highlight: #5a4813;
+  --recording: #f26b5e;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+      --brand-navy: #0b1f33;
+      --brand-teal: #12a594;
+      --canvas: #08141f;
+      --surface: #0f1f30;
+      --surface-sunken: #0b1926;
+      --brand-panel: #173350;
+      --on-brand-panel: #ffffff;
+      --border: #1e3246;
+      --border-strong: #62778b;
+      --ink: #e9eef3;
+      --ink-muted: #9caebf;
+      --accent: #12a594;
+      --accent-strong: #2bb9a7;
+      --accent-text: #3fcab8;
+      --accent-soft: #103a3d;
+      --on-accent: #0b1f33;
+      --highlight: #5a4813;
+      --recording: #f26b5e;
+      color-scheme: dark;
+  }
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-manrope: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Type styles */
+.text-wordmark {
+  font-family: var(--font-sans);
+  font-size: 48px;
+  line-height: 52px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+.text-wordmark-manrope {
+  font-family: var(--font-manrope);
+  font-size: 48px;
+  line-height: 52px;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+.text-display {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.text-title {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.text-heading {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.text-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 400;
+}
+.text-small {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+}
+.text-quote {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 26px;
+  font-weight: 400;
+}
+.text-timestamp {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+/* Base */
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 21px;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+::selection { background: var(--highlight); color: var(--ink); }

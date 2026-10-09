@@ -1,0 +1,145 @@
+/* Shared by the web app and the packaged desktop renderer. */
+* {
+  box-sizing: border-box;
+}
+body {
+  min-width: 320px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+.button {
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 140ms ease-out,
+    border-color 140ms ease-out;
+}
+button:hover,
+.button:hover {
+  background: var(--surface-sunken);
+}
+button:disabled,
+.button:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border-color: var(--border);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.button.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.button.primary:hover {
+  background: var(--accent-strong);
+}
+.button.primary:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border-color: var(--border);
+}
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-height: 36px;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--ink-muted);
+  opacity: 1;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent-text);
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+}
+input[type="file"]::file-selector-button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-right: 12px;
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+a {
+  color: var(--accent-text);
+  text-underline-offset: 3px;
+}
+h1 {
+  font-size: 28px;
+  line-height: 34px;
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: 20px;
+  line-height: 28px;
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: 15px;
+  line-height: 22px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+}
+.brand img {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+.brand .brand-dark {
+  display: none;
+}
+[data-theme="dark"] .brand .brand-light {
+  display: none;
+}
+[data-theme="dark"] .brand .brand-dark {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand .brand-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .brand .brand-dark {
+    display: block;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

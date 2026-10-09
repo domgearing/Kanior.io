@@ -16,6 +16,7 @@ dependencies = [
   "sqlalchemy>=2.0.40,<2.1",
   "svix==2.7.0",
   "uvicorn[standard]>=0.34.2,<0.35",
+  "reportlab>=4.4,<5",
 ]
 
 [dependency-groups]
@@ -26,6 +27,7 @@ dev = [
   "pytest>=9.1.1,<9.2",
   "ruff>=0.11.7,<0.12",
   "types-jsonschema>=4.26.0.20260518",
+  "types-reportlab>=5.0.0.20261008",
 ]
 
 [tool.uv]

@@ -6,6 +6,9 @@
 secrets/
 *.local.pem
 *.local.key
+# Locally generated VPS SSH key pair; keep it outside the checkout as well.
+verelo_ssh_key
+verelo_ssh_key.pub
 
 # Python
 .venv/

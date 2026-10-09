@@ -964,6 +964,15 @@ verify hash and duration
 submit to AssemblyAI
 ```
 
+The web app may control an employee's open desktop recorder through the authenticated API,
+as specified in ADR-006. The browser selects an authorized document and issues only
+Start/Pause/Resume/Stop commands. A same-employee, token-bound desktop device polls short-lived
+commands and alone invokes Recall. The API validates current project write access before Start,
+Pause, or Resume; Stop can still be requested for the owning device after access revocation to end
+local capture, but a failed server transition requires reconciliation and is not shown as complete.
+The web UI must distinguish requested, completed, failed, expired, and offline state. A browser
+cannot itself capture system audio or silently launch an uninstalled desktop application.
+
 Do not enable a second transcription service through Recall when AssemblyAI is the selected transcription provider.
 
 Browser microphone recording may be supported as a fallback, but it must not pretend to capture remote participant audio when the browser/source cannot provide it.
@@ -1045,8 +1054,10 @@ OneDrive outages do not make canonical application data unavailable.
 
 # 20. Authentication and Authorization
 
-Authentication uses a provider-neutral identity boundary. Under ADR-005, local/test development uses
-explicitly allowlisted, single-use email magic links so the scaffold requires no company tenant.
+Authentication uses a provider-neutral identity boundary. Under ADR-005 and ADR-007, local/test
+development uses explicitly allowlisted, single-use challenges so the scaffold requires no company
+tenant. The local development mailbox presents the challenge as an email-bound one-time password;
+Microsoft Graph delivery can still present a magic link.
 Confidential, staging, and production traffic uses a single-tenant Microsoft Entra application.
 
 Magic-link email is a login locator only. It never becomes the stable principal or an authorization
@@ -1070,8 +1081,9 @@ For Entra, use the tenant ID plus object ID as stable external identity keys. Fo
 links, use an immutable identity-account subject; changing email does not change the internal user ID.
 
 All providers issue the same opaque server-side session. Entra uses OAuth authorization-code flow
-with PKCE. Development magic links are hashed at rest, single use, ten-minute expiry, rate limited,
-Origin checked, and restricted by startup validation to local/test environments.
+with PKCE. Development challenges are hashed at rest, single use, ten-minute expiry, rate limited
+at issuance, Origin checked, and restricted by startup validation to local/test environments. A
+mailbox password is not a durable account password or an approved team authentication method.
 
 Initial application roles:
 

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verelo design preview</title>
+<link rel="stylesheet" href="tokens/tokens.css">
+<style>
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 48px 24px 96px; }
+  header.top { display:flex; align-items:center; justify-content:space-between; height:56px; padding:0 24px; background:var(--surface); border-bottom:1px solid var(--border); }
+  header.top img { height:28px; }
+  .logo-dark { display:none; }
+  [data-theme="dark"] .logo-light { display:none; } [data-theme="dark"] .logo-dark { display:inline; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo-light { display:none; } :root:not([data-theme="light"]) .logo-dark { display:inline; } }
+  h2 { margin: 48px 0 16px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(170px,1fr)); gap:16px; }
+  .sw .chip { height:56px; border-radius:var(--radius-md); border:1px solid var(--border); }
+  .sw code, .ty code { display:block; margin-top:4px; font-family:var(--font-mono); font-size:12px; color:var(--ink-muted); }
+  .ty { padding:12px 0; border-bottom:1px solid var(--border); }
+  .row { display:flex; gap:16px; flex-wrap:wrap; align-items:center; }
+  .btn { height:36px; padding:0 16px; border-radius:var(--radius-md); font:600 14px/21px var(--font-sans); cursor:pointer; border:1px solid transparent; }
+  .btn-primary { background:var(--accent); color:var(--on-accent); } .btn-primary:hover { background:var(--accent-strong); }
+  .btn-secondary { background:var(--surface); color:var(--ink); border-color:var(--border-strong); }
+  .btn-danger { background:var(--surface); color:var(--recording); border-color:var(--recording); }
+  .input { height:36px; padding:0 12px; border-radius:var(--radius-md); border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font:400 14px var(--font-sans); width:260px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px; }
+  .badge { display:inline-flex; align-items:center; gap:4px; background:var(--accent-soft); color:var(--accent-text); border-radius:var(--radius-pill); padding:2px 8px; font:600 12px/16px var(--font-sans); }
+  .meta { color:var(--ink-muted); margin-top:8px; }
+  a.ts { color:var(--accent-text); text-decoration:none; }
+  .panel { background:var(--surface-sunken); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px; }
+  mark { background:var(--highlight); color:var(--ink); border-radius:var(--radius-sm); padding:0 2px; }
+  .rec { display:inline-flex; align-items:center; gap:8px; color:var(--recording); font:600 12px/16px var(--font-sans); }
+  .rec i { width:8px; height:8px; border-radius:50%; background:var(--recording); }
+  .brand { background:var(--brand-panel); color:var(--on-brand-panel); border-radius:var(--radius-lg); padding:32px; display:flex; gap:32px; align-items:center; flex-wrap:wrap; }
+  .logos { display:grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+  .logos div { border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; display:flex; flex-direction:column; gap:8px; }
+  .logos img { max-width:100%; height:56px; object-fit:contain; object-position:left; }
+  .logos div { background:#ffffff; } /* logo tiles stay on fixed grounds so every file shows in both themes */
+  .logos div code { color:#526375; }
+  .logos .dk { background:var(--brand-navy); }
+  .logos code { font-family:var(--font-mono); font-size:11px; color:var(--ink-muted); }
+  .logos .dk code { color:#c9d4de; }
+</style>
+</head>
+<body>
+<header class="top">
+  <span><img class="logo-light" src="logos/verelo-lockup-color.png" alt="verelo"><img class="logo-dark" src="logos/verelo-lockup-color-reverse.png" alt="verelo"></span>
+  <button class="btn btn-secondary" onclick="var h=document.documentElement;h.dataset.theme=(h.dataset.theme==='dark'?'light':'dark')">Toggle theme</button>
+</header>
+<div class="wrap">
+  <h1 class="text-display" style="margin:0">Verelo design preview</h1>
+  <p class="meta">Everything on this page is drawn from tokens/tokens.css.</p>
+
+  <h2 class="text-title">Color</h2>
+  <div class="grid"><div class="sw"><div class="chip" style="background:var(--brand-navy)"></div><code>--brand-navy</code></div><div class="sw"><div class="chip" style="background:var(--brand-teal)"></div><code>--brand-teal</code></div><div class="sw"><div class="chip" style="background:var(--canvas)"></div><code>--canvas</code></div><div class="sw"><div class="chip" style="background:var(--surface)"></div><code>--surface</code></div><div class="sw"><div class="chip" style="background:var(--surface-sunken)"></div><code>--surface-sunken</code></div><div class="sw"><div class="chip" style="background:var(--brand-panel)"></div><code>--brand-panel</code></div><div class="sw"><div class="chip" style="background:var(--on-brand-panel)"></div><code>--on-brand-panel</code></div><div class="sw"><div class="chip" style="background:var(--border)"></div><code>--border</code></div><div class="sw"><div class="chip" style="background:var(--border-strong)"></div><code>--border-strong</code></div><div class="sw"><div class="chip" style="background:var(--ink)"></div><code>--ink</code></div><div class="sw"><div class="chip" style="background:var(--ink-muted)"></div><code>--ink-muted</code></div><div class="sw"><div class="chip" style="background:var(--accent)"></div><code>--accent</code></div><div class="sw"><div class="chip" style="background:var(--accent-strong)"></div><code>--accent-strong</code></div><div class="sw"><div class="chip" style="background:var(--accent-text)"></div><code>--accent-text</code></div><div class="sw"><div class="chip" style="background:var(--accent-soft)"></div><code>--accent-soft</code></div><div class="sw"><div class="chip" style="background:var(--on-accent)"></div><code>--on-accent</code></div><div class="sw"><div class="chip" style="background:var(--highlight)"></div><code>--highlight</code></div><div class="sw"><div class="chip" style="background:var(--recording)"></div><code>--recording</code></div></div>
+
+  <h2 class="text-title">Type</h2>
+  <div class="ty"><code>.text-wordmark</code><div class="text-wordmark">verelo</div></div><div class="ty"><code>.text-wordmark-manrope</code><div class="text-wordmark-manrope">verelo</div></div><div class="ty"><code>.text-display</code><div class="text-display">Project: telecom fiber diligence</div></div><div class="ty"><code>.text-title</code><div class="text-title">Former VP Network Ops, regional carrier</div></div><div class="ty"><code>.text-heading</code><div class="text-heading">Executive summary</div></div><div class="ty"><code>.text-body</code><div class="text-body">Search across every call in this project.</div></div><div class="ty"><code>.text-small</code><div class="text-small">Verified · 12 Oct 2026</div></div><div class="ty"><code>.text-quote</code><div class="text-quote">"We lost about a third of our enterprise accounts to fiber overbuilders in two years."</div></div><div class="ty"><code>.text-timestamp</code><div class="text-timestamp">00:24:17</div></div>
+
+  <h2 class="text-title">Controls</h2>
+  <div class="row">
+    <button class="btn btn-primary">Start recording</button>
+    <button class="btn btn-secondary">Import recording</button>
+    <button class="btn btn-danger">Delete transcript</button>
+    <input class="input" placeholder="Search quotes in this project">
+    <span class="badge">&#10003; Verified</span>
+    <span class="rec"><i></i>Recording <span class="text-timestamp" style="color:var(--ink-muted)">00:12:48</span></span>
+  </div>
+
+  <h2 class="text-title">Quote card and transcript</h2>
+  <div class="row" style="align-items:stretch">
+    <div class="card" style="flex:1;min-width:300px">
+      <div class="text-quote">&ldquo;We lost about a third of our enterprise accounts to fiber overbuilders in two years.&rdquo;</div>
+      <div class="text-small meta">Former VP Network Ops, regional carrier &middot; <a class="ts text-timestamp" href="#">00:24:17</a> &nbsp;<span class="badge">&#10003; Verified</span></div>
+    </div>
+    <div class="panel" style="flex:1;min-width:300px">
+      <div class="text-heading">Expert <a class="ts text-timestamp" href="#" style="margin-left:8px">00:24:09</a></div>
+      <p class="text-body" style="margin:4px 0 0">Pricing held up fine in residential. <mark>We lost about a third of our enterprise accounts to fiber overbuilders in two years.</mark> Most of that was in the metro footprint.</p>
+    </div>
+  </div>
+
+  <h2 class="text-title">Brand panel</h2>
+  <div class="brand"><img src="logos/verelo-lockup-color-reverse.png" alt="verelo" style="height:40px"><span class="text-title">Every quote, word for word.</span></div>
+
+  <h2 class="text-title">Logos</h2>
+  <div class="logos">
+    <div><img src="logos/verelo-lockup-color.png" alt=""><code>verelo-lockup-color.png</code></div>
+    <div class="dk"><img src="logos/verelo-lockup-color-reverse.png" alt=""><code>verelo-lockup-color-reverse.png</code></div>
+    <div><img src="logos/verelo-lockup-navy.png" alt=""><code>verelo-lockup-navy.png</code></div>
+    <div class="dk"><img src="logos/verelo-lockup-white.png" alt=""><code>verelo-lockup-white.png</code></div>
+    <div><img src="logos/verelo-mark-color.png" alt=""><code>verelo-mark-color.png</code></div>
+    <div class="dk"><img src="logos/verelo-mark-color-reverse.png" alt=""><code>verelo-mark-color-reverse.png</code></div>
+    <div><img src="logos/verelo-mark-navy.png" alt=""><code>verelo-mark-navy.png</code></div>
+    <div class="dk"><img src="logos/verelo-mark-white.png" alt=""><code>verelo-mark-white.png</code></div>
+    <div><img src="logos/verelo-wordmark-navy.png" alt=""><code>verelo-wordmark-navy.png</code></div>
+    <div class="dk"><img src="logos/verelo-wordmark-white.png" alt=""><code>verelo-wordmark-white.png</code></div>
+  </div>
+</div>
+</body>
+</html>

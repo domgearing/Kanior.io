@@ -429,9 +429,9 @@ Git Bash with:
 The launcher starts PostgreSQL, applies migrations, validates live Recall/B2/AssemblyAI settings,
 provisions local worker grants, and starts the API, worker supervisor, web app, and
 Electron recorder. Sign in within Electron, then select or create a project and meeting there. For local
-magic-link delivery, paste the link from `.artifacts/dev-mailbox/latest.json` into Electron's
-sign-in link field. The worker supervisor adds new local projects while the launcher runs. The public
-Recall tunnel remains an operator prerequisite.
+mailbox delivery, request a one-time password in Electron's web sign-in window and copy the
+`password` field from `.artifacts/dev-mailbox/latest.json`. The worker supervisor adds new local
+projects while the launcher runs. The public Recall tunnel remains an operator prerequisite.
 
 Complete the detailed procedure in [integrations/recall.md](integrations/recall.md) with fictional
 audio. At minimum, prove:

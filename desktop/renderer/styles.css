@@ -1,0 +1,245 @@
+body {
+  background: var(--canvas);
+  color: var(--ink);
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 48px 48px;
+}
+.capture-header {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 48px;
+  padding-bottom: 16px;
+}
+.capture-header > span {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+h1 {
+  margin: 0 0 16px;
+}
+h2 {
+  margin: 0 0 16px;
+}
+p {
+  color: var(--ink-muted);
+}
+.capture-intro {
+  margin-bottom: 24px;
+  max-width: 560px;
+}
+#mode,
+#recorder-connection {
+  font-size: 12px;
+  margin: 8px 0;
+}
+#sign-in,
+#meeting-picker,
+#history-section {
+  padding: 24px;
+  margin: 24px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+button {
+  margin: 4px 4px 4px 0;
+}
+label {
+  display: block;
+  margin: 16px 0;
+  font-weight: 600;
+}
+select {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+input[type="url"],
+input[type="text"],
+input:not([type]) {
+  width: 100%;
+}
+label:has(input[type="checkbox"]) {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+label input[type="checkbox"] {
+  margin-right: 8px;
+}
+#create-meeting,
+#magic-link-controls {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+#capture-controls {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+output {
+  display: block;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-top: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/18px var(--font-mono);
+}
+#processing {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#history {
+  padding: 0;
+  list-style: none;
+}
+#history li {
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+  overflow-wrap: anywhere;
+}
+.history-status {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 12px;
+  margin: 8px 0;
+}
+#history button {
+  margin-left: 0;
+}
+#review-panel {
+  background: var(--surface-sunken);
+  border-left: 1px solid var(--border);
+  height: 100vh;
+  overflow: auto;
+  padding: 24px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: min(480px, 100vw);
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(11, 31, 51, 0.12);
+}
+#review-panel[hidden] {
+  display: none;
+}
+#review-panel audio {
+  width: 100%;
+  margin: 0;
+}
+#review-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-top: 16px;
+  padding: 16px;
+}
+#review-playback:has(#review-audio:not([hidden])) {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+}
+#review-playback > button {
+  margin-top: 12px;
+}
+#review-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+#review-panel h2 {
+  margin: 0;
+}
+#review-transcript {
+  line-height: 24px;
+  max-height: 65vh;
+  overflow: auto;
+}
+#review-transcript section {
+  margin: 16px 0;
+  padding: 16px;
+  border-radius: var(--radius-md);
+}
+#review-transcript section.active {
+  background: var(--surface);
+}
+#review-transcript .active-word {
+  background: var(--highlight);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+}
+#review-transcript pre {
+  font: inherit;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+#review-transcript p {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+#review-note {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+#review-waveform {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.waveform-help {
+  color: var(--ink-muted);
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+}
+#review-waveform-track {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+  cursor: crosshair;
+  height: 98px;
+  margin: 8px 0;
+  touch-action: none;
+}
+#review-waveform-track:focus-visible {
+  outline: 2px solid var(--ink);
+}
+#review-waveform-track svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+#review-waveform-times {
+  color: var(--ink-muted);
+  display: flex;
+  font: 12px/18px var(--font-mono);
+  justify-content: space-between;
+}
+@media (max-width: 600px) {
+  main {
+    padding: 16px;
+  }
+  .capture-header {
+    margin-bottom: 24px;
+  }
+  #sign-in,
+  #meeting-picker,
+  #history-section {
+    padding: 16px;
+  }
+  #review-panel {
+    width: 100vw;
+  }
+}

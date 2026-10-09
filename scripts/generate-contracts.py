@@ -75,6 +75,15 @@ def generate_json():
                     "schema": {"type": "string", "minLength": 32, "maxLength": 256},
                 }
             )
+        if op.device_token:
+            parameters.append(
+                {
+                    "name": "X-Recorder-Device-Token",
+                    "in": "header",
+                    "required": True,
+                    "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                }
+            )
         success_headers = dict(headers)
         if op.success == 201:
             success_headers["Location"] = {

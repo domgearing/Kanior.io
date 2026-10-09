@@ -35,6 +35,13 @@ def test_entra_browser_flow_binds_cookie_and_redirects_safely() -> None:
         assert client.get("/api/v1/auth/mode").json() == {"provider": "entra"}
         assert (
             client.post(
+                "/api/v1/auth/dev-password/request",
+                json={"email": "employee@example.invalid"},
+            ).status_code
+            == 404
+        )
+        assert (
+            client.post(
                 "/api/v1/auth/magic-link/request", json={"email": "employee@example.invalid"}
             ).status_code
             == 404

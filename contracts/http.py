@@ -19,6 +19,7 @@ class Operation:
     paginated: bool = False
     csrf: bool = True
     authenticated: bool = True
+    device_token: bool = False
 
 
 OPERATIONS = (
@@ -28,6 +29,27 @@ OPERATIONS = (
         "get_authentication_mode",
         m.AuthenticationMode,
         "Describe the configured interactive sign-in method",
+        csrf=False,
+        authenticated=False,
+    ),
+    Operation(
+        "post",
+        "/auth/dev-password/request",
+        "request_development_password",
+        m.DevelopmentPasswordRequestAccepted,
+        "Request a local/test one-time password without disclosing account eligibility",
+        m.MagicLinkRequest,
+        202,
+        csrf=False,
+        authenticated=False,
+    ),
+    Operation(
+        "post",
+        "/auth/dev-password/consume",
+        "consume_development_password",
+        m.AuthenticationResult,
+        "Consume an email-bound local/test one-time password",
+        m.DevelopmentPasswordConsume,
         csrf=False,
         authenticated=False,
     ),
@@ -188,6 +210,13 @@ OPERATIONS = (
         "Read the immutable current transcript draft",
     ),
     Operation(
+        "get",
+        "/ingestions/{ingestion_id}/word-alignment",
+        "get_transcript_word_alignment",
+        m.TranscriptWordAlignment,
+        "Read exact provider word timing only when it matches the current transcript",
+    ),
+    Operation(
         "put",
         "/ingestions/{ingestion_id}/draft",
         "create_corrected_draft",
@@ -251,6 +280,13 @@ OPERATIONS = (
         "Read an authorized immutable source asset",
     ),
     Operation(
+        "get",
+        "/source-assets/{source_asset_id}/waveform",
+        "get_source_asset_waveform",
+        m.SourceAssetWaveform,
+        "Read a compact waveform for an authorized original audio source",
+    ),
+    Operation(
         "post",
         "/capture-sessions",
         "create_capture_session",
@@ -258,6 +294,55 @@ OPERATIONS = (
         "Create a persistent recording session",
         m.CaptureCreate,
         201,
+    ),
+    Operation(
+        "get",
+        "/recorder-devices",
+        "list_recorder_devices",
+        m.RecorderDevicePage,
+        "List the signed-in employee's desktop recorders",
+    ),
+    Operation(
+        "put",
+        "/recorder-devices/{device_id}/heartbeat",
+        "heartbeat_recorder_device",
+        m.RecorderDevice,
+        "Report local recorder state",
+        m.RecorderHeartbeat,
+        device_token=True,
+    ),
+    Operation(
+        "post",
+        "/recorder-devices/{device_id}/commands",
+        "create_recorder_command",
+        m.RecorderCommand,
+        "Request an authorized desktop capture action",
+        m.RecorderCommandCreate,
+        201,
+    ),
+    Operation(
+        "post",
+        "/recorder-devices/{device_id}/commands/claim",
+        "poll_recorder_command",
+        m.RecorderCommandPoll,
+        "Claim the next short-lived desktop command",
+        device_token=True,
+    ),
+    Operation(
+        "get",
+        "/recorder-commands/{command_id}",
+        "get_recorder_command",
+        m.RecorderCommand,
+        "Read the safe command result",
+    ),
+    Operation(
+        "post",
+        "/recorder-commands/{command_id}/result",
+        "complete_recorder_command",
+        m.RecorderCommand,
+        "Report the desktop action result",
+        m.RecorderCommandResult,
+        device_token=True,
     ),
     Operation(
         "get",

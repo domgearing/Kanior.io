@@ -34,6 +34,10 @@ class MagicLinkDelivery(Protocol):
     def deliver(self, recipient: str, link: str, expires_at: str) -> None: ...
 
 
+class DevelopmentPasswordDelivery(Protocol):
+    def deliver_password(self, recipient: str, password: str, expires_at: str) -> None: ...
+
+
 def normalize_email(value: str) -> str:
     local, domain = value.strip().rsplit("@", 1)
     return f"{local.casefold()}@{domain.casefold()}"
@@ -46,14 +50,21 @@ def _digest(value: str) -> str:
 class MagicLinkIdentityProvider:
     """Development-only passwordless provider; authorization remains internal."""
 
-    def __init__(self, engine: Engine, delivery: MagicLinkDelivery, base_url: str) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        delivery: MagicLinkDelivery,
+        base_url: str,
+        password_delivery: DevelopmentPasswordDelivery | None = None,
+    ) -> None:
         self._engine = engine
         self._delivery = delivery
         self._base_url = base_url
+        self._password_delivery = password_delivery
 
-    def begin(self, identifier: str, source: str, request_id: str) -> None:
-        email = normalize_email(identifier)
-        raw_token = token_urlsafe(32)
+    def _request_challenge(
+        self, email: str, credential: str, source: str, request_id: str
+    ) -> str | None:
         with self._engine.begin() as connection:
             row = (
                 connection.execute(
@@ -63,7 +74,7 @@ class MagicLinkIdentityProvider:
                     ),
                     {
                         "challenge": uuid4(),
-                        "token": _digest(raw_token),
+                        "token": _digest(credential),
                         "email": email,
                         "email_hash": _digest(email),
                         "source_hash": _digest(source),
@@ -73,13 +84,44 @@ class MagicLinkIdentityProvider:
                 .mappings()
                 .one()
             )
-        if row["deliver"]:
+        return row["expires_at"].isoformat() if row["deliver"] else None
+
+    def begin(self, identifier: str, source: str, request_id: str) -> None:
+        email = normalize_email(identifier)
+        raw_token = token_urlsafe(32)
+        expires_at = self._request_challenge(email, raw_token, source, request_id)
+        if expires_at:
             link = f"{self._base_url}#token={quote(raw_token, safe='')}"
             try:
-                self._delivery.deliver(email, link, row["expires_at"].isoformat())
+                self._delivery.deliver(email, link, expires_at)
             except OSError:
                 # The public response remains neutral; the unused challenge expires naturally.
                 return
+
+    def begin_password(self, identifier: str, source: str, request_id: str) -> None:
+        if self._password_delivery is None:
+            raise DomainError("not_found", 404, "The resource was not found.")
+        email = normalize_email(identifier)
+        password = token_urlsafe(32)
+        expires_at = self._request_challenge(email, f"{email}\0{password}", source, request_id)
+        if expires_at:
+            try:
+                self._password_delivery.deliver_password(email, password, expires_at)
+            except OSError:
+                return
+
+    def complete_password(
+        self, identifier: str, password: str, source: str, request_id: str
+    ) -> EstablishedSession:
+        if self._password_delivery is None:
+            raise DomainError("not_found", 404, "The resource was not found.")
+        credential = f"{normalize_email(identifier)}\0{password}"
+        try:
+            return self.complete(credential, source, request_id)
+        except DomainError as error:
+            raise DomainError(
+                "unauthenticated", 401, "The password is invalid or expired."
+            ) from error
 
     def complete(self, credential: str, source: str, request_id: str) -> EstablishedSession:
         opaque_token = token_urlsafe(32)

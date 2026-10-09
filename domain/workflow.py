@@ -27,13 +27,17 @@ from contracts.models import (
     IngestionCreate,
     IngestionFinalize,
     IngestionPage,
+    SegmentWordAlignment,
     SourceAssetContent,
+    SourceAssetWaveform,
+    TimedWord,
     TranscriptApprovalCreate,
     TranscriptDownload,
     TranscriptDraft,
     TranscriptPublication,
     TranscriptPublicationCreate,
     TranscriptSegment,
+    TranscriptWordAlignment,
 )
 from domain.errors import CONFLICT, FORBIDDEN, NOT_FOUND, DomainError
 from domain.ingestion import (
@@ -49,6 +53,9 @@ from domain.ingestion import (
 from domain.media import MediaValidationError, validate_audio
 from domain.providers import ObjectStorage, TranscriptionProvider, TranscriptSegmentResult
 from domain.reconciliation import ReconciliationError, reconcile_provider_segments
+from domain.transcript_pdf import render_transcript_pdf
+from domain.waveform import audio_waveform
+from domain.word_alignment import extract_word_alignment
 
 _MAX_CHUNK_BYTES = 5 * 1024 * 1024
 _TRANSCRIPT_LIMIT = 20 * 1024 * 1024
@@ -464,6 +471,59 @@ class IngestionWorkflowService:
         with scoped_transaction(self._engine, context, project_id) as connection:
             return self._draft_response(connection, ingestion_id)
 
+    def word_alignment(self, context: AuthContext, ingestion_id: UUID) -> TranscriptWordAlignment:
+        project_id = self._ingestion_project(context, ingestion_id)
+        with scoped_transaction(self._engine, context, project_id) as connection:
+            draft = self._draft_row(connection, ingestion_id)
+            raw = (
+                connection.execute(
+                    text(
+                        """SELECT provider,raw_object_ref,raw_sha256,parsed_object_ref,parsed_sha256
+                        FROM raw_transcripts WHERE id=:id"""
+                    ),
+                    {"id": draft["raw_transcript_id"]},
+                )
+                .mappings()
+                .one()
+            )
+        if raw["provider"] != "assemblyai":
+            return TranscriptWordAlignment(
+                draft_id=draft["draft_id"],
+                available=False,
+                matches_current_draft=False,
+                source_segments=[],
+                segments=[],
+            )
+        raw_bytes = self._objects.read_version(raw["raw_object_ref"])
+        parsed_bytes = self._objects.read_version(raw["parsed_object_ref"])
+        canonical = self._objects.read_version(draft["canonical_object_ref"])
+        if (
+            sha256(raw_bytes).hexdigest() != raw["raw_sha256"]
+            or sha256(parsed_bytes).hexdigest() != raw["parsed_sha256"]
+            or sha256(canonical).hexdigest() != draft["content_sha256"]
+        ):
+            raise DomainError(
+                "internal_error", 500, "Stored transcript integrity verification failed."
+            )
+        source_segments = [
+            TranscriptSegment(**item) for item in json.loads(parsed_bytes)["segments"]
+        ]
+        segment_texts = tuple(item.text for item in source_segments)
+        aligned = extract_word_alignment(raw_bytes, segment_texts)
+        return TranscriptWordAlignment(
+            draft_id=draft["draft_id"],
+            available=bool(aligned),
+            matches_current_draft="\n".join(segment_texts) == canonical.decode("utf-8"),
+            source_segments=source_segments,
+            segments=[
+                SegmentWordAlignment(
+                    index=item.index,
+                    words=[TimedWord(**vars(word)) for word in item.words],
+                )
+                for item in aligned
+            ],
+        )
+
     def correct(
         self, context: AuthContext, ingestion_id: UUID, request: CorrectedDraftPut
     ) -> TranscriptDraft:
@@ -844,7 +904,7 @@ class IngestionWorkflowService:
         self, context: AuthContext, document_id: UUID, format_name: str
     ) -> TranscriptDownload:
         publication = self.get_publication(context, document_id)
-        if format_name not in {"txt", "md", "json"}:
+        if format_name not in {"txt", "md", "json", "pdf"}:
             raise NOT_FOUND
         with scoped_transaction(self._engine, context) as initial:
             project_id = initial.execute(
@@ -872,16 +932,38 @@ class IngestionWorkflowService:
             )
             for item in manifest.get("segments", [])
         )
+        faithful_segments = (
+            segments
+            if "\n".join(item.text for item in segments) == publication.canonical_text
+            else ()
+        )
         if format_name == "txt":
-            organized = format_segmented_transcript(segments) or publication.canonical_text
+            organized = format_segmented_transcript(faithful_segments) or publication.canonical_text
             data = organized.encode("utf-8")
             media = "text/plain; charset=utf-8"
         elif format_name == "md":
             organized = (
-                format_segmented_transcript(segments, markdown=True) or publication.canonical_text
+                format_segmented_transcript(faithful_segments, markdown=True)
+                or publication.canonical_text
             )
             data = f"# {version['title']}\n\n{organized}\n".encode()
             media = "text/markdown; charset=utf-8"
+        elif format_name == "pdf":
+            try:
+                data = render_transcript_pdf(
+                    version["title"],
+                    publication.canonical_text,
+                    faithful_segments,
+                    str(publication.transcript_version_id),
+                    publication.content_sha256,
+                )
+            except ValueError as error:
+                raise DomainError(
+                    "invalid_input",
+                    422,
+                    "This transcript contains characters the PDF font cannot render.",
+                ) from error
+            media = "application/pdf"
         else:
             data = json.dumps(
                 {
@@ -907,7 +989,7 @@ class IngestionWorkflowService:
             sha256=sha256(data).hexdigest(),
         )
 
-    def source_content(self, context: AuthContext, source_asset_id: UUID) -> SourceAssetContent:
+    def _source_asset_data(self, context: AuthContext, source_asset_id: UUID) -> tuple[Any, bytes]:
         with scoped_transaction(self._engine, context) as initial:
             project_id = initial.execute(
                 text("SELECT project_id FROM source_assets WHERE id=:id"), {"id": source_asset_id}
@@ -927,12 +1009,32 @@ class IngestionWorkflowService:
         data = self._objects.read_version(row["object_ref"])
         if sha256(data).hexdigest() != row["sha256"]:
             raise DomainError("internal_error", 500, "Stored source integrity verification failed.")
+        return row, data
+
+    def source_content(self, context: AuthContext, source_asset_id: UUID) -> SourceAssetContent:
+        row, data = self._source_asset_data(context, source_asset_id)
         return SourceAssetContent(
             source_asset_id=source_asset_id,
             media_type=row["detected_mime"],
             byte_length=len(data),
             sha256=row["sha256"],
             content_base64=base64.b64encode(data).decode("ascii"),
+        )
+
+    def source_waveform(self, context: AuthContext, source_asset_id: UUID) -> SourceAssetWaveform:
+        row, data = self._source_asset_data(context, source_asset_id)
+        if row["kind"] != "audio":
+            raise NOT_FOUND
+        try:
+            peaks = audio_waveform(data, row["duration_ms"] or 0)
+        except MediaValidationError as error:
+            raise DomainError(
+                "internal_error", 500, "Stored audio could not be decoded."
+            ) from error
+        return SourceAssetWaveform(
+            source_asset_id=source_asset_id,
+            duration_ms=row["duration_ms"],
+            peaks=list(peaks),
         )
 
     def get_publication(self, context: AuthContext, document_id: UUID) -> TranscriptPublication:

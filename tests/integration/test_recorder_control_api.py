@@ -23,9 +23,10 @@ def test_web_commands_are_employee_device_and_meeting_scoped(monkeypatch) -> Non
     monkeypatch.setenv("VERELO_IDENTITY_PROVIDER", "magic_link")
     monkeypatch.setenv("VERELO_PUBLIC_ORIGIN", ORIGIN)
     monkeypatch.setenv("VERELO_SESSION_COOKIE_SECURE", "false")
-    api_url = os.environ.get(
-        "VERELO_TEST_API_DATABASE_URL",
-        "postgresql+psycopg://verelo_api:verelo_api@127.0.0.1:5432/verelo",
+    api_url = (
+        os.environ.get("VERELO_TEST_API_DATABASE_URL")
+        or os.environ.get("VERELO_DATABASE_URL")
+        or "postgresql+psycopg://verelo_api:verelo_api@127.0.0.1:5432/verelo"
     )
     admin_url = os.environ.get(
         "VERELO_TEST_ADMIN_DATABASE_URL",

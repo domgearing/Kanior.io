@@ -9,7 +9,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -237,24 +236,24 @@ def _lock() -> Iterator[None]:
         handle.flush()
         handle.seek(0)
         try:
-            if os.name == "nt":
+            if sys.platform == "win32":
                 import msvcrt
 
                 msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
             else:
                 import fcntl
 
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
             raise BackupFailure("backup_already_running") from error
         try:
             yield
         finally:
             handle.seek(0)
-            if os.name == "nt":
+            if sys.platform == "win32":
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             else:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def create_backup(settings: Settings) -> str:
